@@ -67,12 +67,12 @@ Create an `enrolled/` directory with subdirectories for each person. Add 3–5 c
 ```
 enrolled/
   Anthony/
-    photo1.jpg
-    photo2.jpg
-    photo3.jpg
+    Anthony1.jpg
+    Anthony2.jpg
+    Anthony3.jpg
   Nedas/
-    photo1.jpg
-    photo2.jpg
+    Nedas1.jpg
+    Nedas2.jpg
 ```
 
 Photos should be well-lit, front-facing, and taken at roughly the distance the camera will be used.
