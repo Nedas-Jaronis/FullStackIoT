@@ -40,6 +40,8 @@ source venv/bin/activate
 
 ```bash
 pip install fastapi uvicorn python-multipart deepface opencv-python supabase python-dotenv
+
+pip install tf-keras
 ```
 
 **What each package does:**
