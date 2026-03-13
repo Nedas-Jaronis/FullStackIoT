@@ -25,7 +25,7 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 def find_match(image_path):
     best_name = "unknown"
-    best_confidence = 0.0
+    best_distance = float("inf")
 
     for person_dir in ENROLLED_DIR.iterdir():
         if not person_dir.is_dir():
@@ -39,17 +39,25 @@ def find_match(image_path):
                     model_name="ArcFace", #Our selected model its Best accuracy and medium speed
                     enforce_detection=False,
                 )
-                confidence = 1 - result["distance"]
-                if confidence > best_confidence:
-                    best_confidence = confidence
+                distance = result["distance"]
+                threshold = result["threshold"]
+                verified = result["verified"]
+                print(f"  {person_dir.name}/{ref_image.name}: distance={distance:.4f}, threshold={threshold}, verified={verified}")
+
+                # only consider verified matches, then pick the closest one
+                if verified and distance < best_distance:
+                    best_distance = distance
                     best_name = person_dir.name
-            except Exception:
+            except Exception as e:
+                print(f"  skipping {ref_image}: {e}")
                 continue
 
-    if best_confidence < CONFIDENCE_THRESHOLD:
-        return "unknown", best_confidence
+    if best_name == "unknown":
+        return "unknown", 0.0
 
-    return best_name, best_confidence
+    # convert distance to a confidence score (lower distance = higher confidence)
+    confidence = max(0, 1 - best_distance)
+    return best_name, confidence
 
 
 def log_event(decision, confidence, latency_ms):
