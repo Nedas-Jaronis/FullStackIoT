@@ -37,7 +37,7 @@ def find_match(image_path):
                     img1_path=image_path,
                     img2_path=str(ref_image),
                     model_name="ArcFace", #Our selected model its Best accuracy and medium speed
-                    enforce_detection=False,
+                    enforce_detection=True,
                 )
                 distance = result["distance"]
                 threshold = result["threshold"]
