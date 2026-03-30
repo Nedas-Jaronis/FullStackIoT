@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import bcrypt
+import numpy as np
 from deepface import DeepFace
 from supabase import create_client
 
@@ -112,12 +113,14 @@ def require_auth(authorization: str = Header(default="")) -> str:
     return token
 
 
-# ── Face recognition helpers ────────────────────────────────────────────────────
+# ── Embedding cache ────────────────────────────────────────────────────────────
+# stores pre-computed embeddings so we don't reprocess enrolled photos every scan
+# each entry: {"name": "Nedas", "embedding": np.array, "source": "Nedas/photo1.jpg"}
+embedding_cache = []
+
+
 def _download_enrolled(tmp_dir: str) -> bool:
-    """
-    Download all reference photos from Supabase Storage into tmp_dir.
-    Returns True if at least one photo was downloaded.
-    """
+    """Download all reference photos from Supabase Storage into tmp_dir."""
     if not supabase_admin:
         return False
     try:
@@ -150,42 +153,86 @@ def _download_enrolled(tmp_dir: str) -> bool:
         return False
 
 
-def _run_deepface(image_path: str, enrolled_dir: Path):
-    best_name = "unknown"
-    best_distance = float("inf")
+def build_embedding_cache(enrolled_dir: Path):
+    """Pre-compute embeddings for all enrolled photos. Call on startup or after enrollment changes."""
+    global embedding_cache
+    new_cache = []
+    print(f"Building embedding cache from {enrolled_dir}...")
 
     for person_dir in enrolled_dir.iterdir():
         if not person_dir.is_dir():
             continue
         for ref_image in person_dir.glob("*.jpg"):
             try:
-                result = DeepFace.verify(
-                    img1_path=image_path,
-                    img2_path=str(ref_image),
+                # extract the face embedding vector
+                reps = DeepFace.represent(
+                    img_path=str(ref_image),
                     model_name=MODEL_VERSION,
                     enforce_detection=True,
                 )
-                distance = result["distance"]
-                verified = result["verified"]
-                print(f"  {person_dir.name}/{ref_image.name}: distance={distance:.4f}, verified={verified}")
-                if verified and distance < best_distance:
-                    best_distance = distance
-                    best_name = person_dir.name
+                if reps:
+                    new_cache.append({
+                        "name": person_dir.name,
+                        "embedding": np.array(reps[0]["embedding"]),
+                        "source": f"{person_dir.name}/{ref_image.name}",
+                    })
+                    print(f"  cached {person_dir.name}/{ref_image.name}")
             except Exception as e:
                 print(f"  skipping {ref_image.name}: {e}")
+
+    embedding_cache = new_cache
+    print(f"Cache ready: {len(embedding_cache)} embeddings for {len(set(e['name'] for e in embedding_cache))} people")
+
+
+def load_and_cache_embeddings():
+    """Download from Supabase or use local enrolled/, then build cache."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        if _download_enrolled(tmp_dir):
+            build_embedding_cache(Path(tmp_dir))
+        else:
+            print("Supabase storage unavailable — falling back to local enrolled/")
+            build_embedding_cache(ENROLLED_DIR)
+
+
+def find_match(image_path: str):
+    if not embedding_cache:
+        return "unknown", 0.0
+
+    # get embedding for the uploaded image — no face detected means unknown
+    try:
+        reps = DeepFace.represent(
+            img_path=image_path,
+            model_name=MODEL_VERSION,
+            enforce_detection=True,
+        )
+    except ValueError:
+        print("  no face detected in uploaded image")
+        return "unknown", 0.0
+
+    if not reps:
+        return "unknown", 0.0
+
+    test_embedding = np.array(reps[0]["embedding"])
+
+    # compare against all cached embeddings using cosine distance
+    best_name = "unknown"
+    best_distance = float("inf")
+
+    for entry in embedding_cache:
+        # cosine distance
+        dot = np.dot(test_embedding, entry["embedding"])
+        norm = np.linalg.norm(test_embedding) * np.linalg.norm(entry["embedding"])
+        distance = 1 - (dot / norm) if norm > 0 else 1.0
+        confidence = max(0.0, 1 - distance)
+        print(f"  {entry['source']}: distance={distance:.4f}, confidence={confidence:.1%}")
+
+        if distance < CONFIDENCE_THRESHOLD and distance < best_distance:
+            best_distance = distance
+            best_name = entry["name"]
 
     if best_name == "unknown":
         return "unknown", 0.0
     return best_name, max(0.0, 1 - best_distance)
-
-
-def find_match(image_path: str):
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        if _download_enrolled(tmp_dir):
-            return _run_deepface(image_path, Path(tmp_dir))
-        # Fallback to local enrolled/ directory
-        print("Supabase storage unavailable — falling back to local enrolled/")
-        return _run_deepface(image_path, ENROLLED_DIR)
 
 
 def log_event(decision, confidence, latency_ms, device_id="web-ui"):
@@ -213,6 +260,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# build embedding cache on startup so scans are fast
+@app.on_event("startup")
+async def startup():
+    load_and_cache_embeddings()
+
+
+# endpoint to reload cache after enrolling new people
+@app.post("/reload-cache")
+async def reload_cache(_=Depends(require_auth)):
+    load_and_cache_embeddings()
+    return {"status": "ok", "cached": len(embedding_cache)}
 
 
 # ── Verification ─────────────────────────────────────────────────────────────────
