@@ -1,14 +1,10 @@
 #include <WiFi.h>
-#include <HTTPClient.h>
-#include <driver/i2s.h>
-#include <math.h>
+#include <esp_now.h>
+#include "Audio.h"
 
-// WiFi config 
+// WiFi config (needed for Google TTS streaming)
 const char* ssid = "";
 const char* password = "";
-
-// Gateway server
-const char* gatewayUrl = "http://IP of laptop:5000";
 
 // Pin assignments
 #define BUTTON_PIN    13
@@ -16,94 +12,36 @@ const char* gatewayUrl = "http://IP of laptop:5000";
 #define RED_LED       4    // unknown led
 #define BLUE_LED      15   // processing led
 
-// I2S config for Audio Converter and Amplifier
+// I2S pins for PCM5102A
 #define I2S_BCK       26
 #define I2S_LCK       25
 #define I2S_DIN       22
-#define SAMPLE_RATE   16000
+
+// Audio library handles I2S for us
+Audio audio;
 
 // ESP-NOW
-#include <esp_now.h>
-// MAC address of MCU-A (ESP32-CAM) | TODO: Update this after flashing MCU-A
-uint8_t mcuA_address[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+// MAC address of MCU-A — update after flashing MCU-A
+uint8_t mcuA_address[] = {0x6C, 0xC8, 0x40, 0x78, 0xFE, 0x40};
 
-// message structure shared between MCU-A and MCU-B
+// message structs — MUST match MCU-A exactly
 typedef struct {
-  char command[16];   // "capture" or "result"
-  char payload[64];   // name result from gateway
-} esp_msg_t;
+  char cmd[8];  // "CAPTURE"
+} TriggerMsg;
 
-esp_msg_t outgoing;
-esp_msg_t incoming;
+typedef struct {
+  bool trusted;
+  char name[32];
+  char description[64];
+  int  confidence_pct;  // 0-100
+} ResultMsg;
+
+TriggerMsg triggerOut;
+ResultMsg  resultIn;
 volatile bool resultReady = false;
+volatile bool listening = false; // only accept results when we're waiting for one
 
-// I2S setup
-void setupI2S() {
-  i2s_config_t config = {
-    .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-    .sample_rate = SAMPLE_RATE,
-    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-    .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
-    .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-    .dma_buf_count = 8,
-    .dma_buf_len = 64,
-    .use_apll = false
-  };
-
-  i2s_pin_config_t pins = {
-    .bck_io_num = I2S_BCK,
-    .ws_io_num = I2S_LCK,
-    .data_out_num = I2S_DIN,
-    .data_in_num = I2S_PIN_NO_CHANGE
-  };
-
-  i2s_driver_install(I2S_NUM_0, &config, 0, NULL);
-  i2s_set_pin(I2S_NUM_0, &pins);
-}
-
-// flush silence to stop any leftover noise from the speaker
-void silenceI2S() {
-  int16_t silence[2] = {0, 0};
-  for (int i = 0; i < 1000; i++) {
-    size_t written;
-    i2s_write(I2S_NUM_0, silence, sizeof(silence), &written, portMAX_DELAY);
-  }
-}
-
-// Play a tone through the speaker
-void playTone(int frequency, int duration_ms) {
-  int samples = (SAMPLE_RATE * duration_ms) / 1000;
-  int16_t sample[2]; // stereo: left + right
-
-  for (int i = 0; i < samples; i++) {
-    float t = (float)i / SAMPLE_RATE;
-    int16_t value = (int16_t)(sin(2.0 * M_PI * frequency * t) * 16000);
-    sample[0] = value; // left channel
-    sample[1] = value; // right channel
-    size_t written;
-    i2s_write(I2S_NUM_0, sample, sizeof(sample), &written, portMAX_DELAY);
-  }
-  silenceI2S();
-}
-
-// match sound, two rising tones
-void playMatchSound() {
-  playTone(800, 150);
-  playTone(1200, 200);
-}
-
-// unknown sound, single low tone
-void playUnknownSound() {
-  playTone(300, 400);
-}
-
-// processing sound, quick beep
-void playProcessingBeep() {
-  playTone(600, 100);
-}
-
-//  LED helpers
+// LED helpers
 void ledsOff() {
   digitalWrite(GREEN_LED, LOW);
   digitalWrite(RED_LED, LOW);
@@ -125,20 +63,47 @@ void showUnknown() {
   digitalWrite(RED_LED, HIGH);
 }
 
-// ESP-NOW callbacks
-void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
-  memcpy(&incoming, data, sizeof(incoming));
-  if (strcmp(incoming.command, "result") == 0) {
+// TTS — speak text through Google Translate
+void speakText(String text) {
+  String encoded = "";
+  for (int i = 0; i < text.length(); i++) {
+    char c = text[i];
+    if (c == ' ') {
+      encoded += "+";
+    } else if (isAlphaNumeric(c) || c == '.' || c == '-') {
+      encoded += c;
+    } else {
+      encoded += "%" + String((int)c, HEX);
+    }
+  }
+
+  String url = "http://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=" + encoded;
+  Serial.println("Speaking: " + text);
+  audio.connecttohost(url.c_str());
+
+  // wait for audio to finish playing (timeout after 10 seconds)
+  unsigned long ttsStart = millis();
+  while (audio.isRunning() && (millis() - ttsStart < 10000)) {
+    audio.loop();
+    delay(1);
+  }
+  audio.stopSong(); // force stop if still running
+}
+
+// ESP-NOW callbacks (v2.x API)
+void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+  if (listening && !resultReady && len == sizeof(ResultMsg)) {
+    memcpy(&resultIn, data, sizeof(resultIn));
     resultReady = true;
+    listening = false; // got one result, ignore everything else
   }
 }
 
-void onDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
+void onDataSent(const uint8_t *mac, esp_now_send_status_t status) {
   Serial.print("Send status: ");
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "ok" : "fail");
 }
 
-// Setup
 void setup() {
   Serial.begin(115200);
 
@@ -149,10 +114,7 @@ void setup() {
   pinMode(BLUE_LED, OUTPUT);
   ledsOff();
 
-  // I2S audio
-  setupI2S();
-
-  // WiFi Setup
+  // WiFi (needed for TTS streaming and ESP-NOW)
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
@@ -163,6 +125,11 @@ void setup() {
   Serial.println();
   Serial.print("Connected, IP: ");
   Serial.println(WiFi.localIP());
+  Serial.printf("WiFi channel: %d\n", WiFi.channel());
+
+  // Audio setup
+  audio.setPinout(I2S_BCK, I2S_LCK, I2S_DIN);
+  audio.setVolume(8); // 0-21
 
   // ESP-NOW
   if (esp_now_init() != ESP_OK) {
@@ -176,65 +143,81 @@ void setup() {
   esp_now_peer_info_t peer;
   memset(&peer, 0, sizeof(peer));
   memcpy(peer.peer_addr, mcuA_address, 6);
-  peer.channel = 0;
+  peer.channel = WiFi.channel(); // must match MCU-A's WiFi channel
   peer.encrypt = false;
   esp_now_add_peer(&peer);
 
-  // startup indicator
-  playProcessingBeep();
+  Serial.print("MCU-B MAC: ");
+  Serial.println(WiFi.macAddress());
   Serial.println("MCU-B ready");
 }
 
-// Main loop
 void loop() {
-  // wait for button press (active LOW because of pull-up)
+  audio.loop(); // keep audio streaming
+
+  // wait for button press
   if (digitalRead(BUTTON_PIN) == LOW) {
     delay(50); // debounce
     if (digitalRead(BUTTON_PIN) == LOW) {
-      Serial.println("Button pressed — sending capture command to MCU-A");
+      Serial.println("Button pressed — sending CAPTURE to MCU-A");
 
-      showProcessing();
-      playProcessingBeep();
-
-      // tell MCU-A to capture a photo
-      strcpy(outgoing.command, "capture");
-      strcpy(outgoing.payload, "");
-      esp_now_send(mcuA_address, (uint8_t *)&outgoing, sizeof(outgoing));
-
-      // wait for result from MCU-A (timeout after 15 seconds)
-      unsigned long start = millis();
+      // clear any stale results and start listening for one new result
       resultReady = false;
-      while (!resultReady && (millis() - start < 15000)) {
+      listening = true;
+      showProcessing();
+
+      // send CAPTURE trigger to MCU-A
+      strcpy(triggerOut.cmd, "CAPTURE");
+      esp_now_send(mcuA_address, (uint8_t *)&triggerOut, sizeof(triggerOut));
+
+      // wait for result from MCU-A (timeout after 25 seconds)
+      unsigned long start = millis();
+      while (!resultReady && (millis() - start < 25000)) {
+        audio.loop();
         delay(100);
       }
 
       if (resultReady) {
-        String name = String(incoming.payload);
-        Serial.print("Result: ");
-        Serial.println(name);
+        // grab result and immediately clear flag so retries are ignored
+        bool trusted = resultIn.trusted;
+        String name = String(resultIn.name);
+        int conf = resultIn.confidence_pct;
+        resultReady = false;
 
-        if (name == "unknown") {
-          showUnknown();
-          playUnknownSound();
-        } else {
+        Serial.printf("Result: trusted=%d name=%s conf=%d%%\n", trusted, name.c_str(), conf);
+
+        if (trusted) {
           showMatch();
-          playMatchSound();
-          // TODO: replace tones with TTS audio for the actual name
+          speakText("Trusted. " + name);
+        } else {
+          showUnknown();
+          speakText("Unknown person");
         }
       } else {
         Serial.println("Timeout — no response from MCU-A");
         showUnknown();
-        playUnknownSound();
       }
 
-      // keep LED on for 3 seconds then turn off
-      delay(3000);
+      // drain any retries that arrived during speech
+      resultReady = false;
+      delay(500);
+      resultReady = false;
+
+      // keep LED on for 2 seconds then turn off
+      delay(2000);
       ledsOff();
 
       // wait for button release
       while (digitalRead(BUTTON_PIN) == LOW) {
         delay(50);
       }
+
+      // final clear — ready for next press
+      resultReady = false;
     }
   }
 }
+
+// Audio library callbacks
+void audio_info(const char *info) { Serial.println(info); }
+void audio_eof_mp3(const char *info) { Serial.println("Done speaking"); }
