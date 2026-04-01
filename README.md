@@ -2,7 +2,32 @@
 
 IoT-enabled assistive glasses for trusted person recognition. Helps visually impaired and memory-impaired users identify nearby people through wearable face verification with audio feedback.
 
-**Architecture:** ESP32-CAM captures a face on button press, sends it to a laptop gateway running DeepFace verification, and an audio ESP32 speaks the result. Enrolled people and photos are stored in Supabase. Cloud logging via Supabase.
+**Architecture:** MCU-A (Freenove ESP32-WROVER) captures a face on button press and POSTs it to a cloud gateway (Google Cloud Run) running DeepFace ArcFace verification. The result is sent back to MCU-B via ESP-NOW — MCU-B handles the button, LED, audio feedback, and battery. Enrolled people, reference photos, and recognition history are stored in Supabase.
+
+---
+
+## Live Cloud Gateway
+
+The gateway is deployed and running at:
+
+```
+https://glasstint-gateway-478053964713.us-central1.run.app
+```
+
+You can test it directly without running anything locally:
+
+```bash
+# Health check
+curl https://glasstint-gateway-478053964713.us-central1.run.app/health
+
+# Face verification
+curl -X POST -F "image=@path/to/photo.jpg" \
+  https://glasstint-gateway-478053964713.us-central1.run.app/verify
+```
+
+The web admin UI is available at the same URL in a browser.
+
+---
 
 ## Prerequisites
 
@@ -10,12 +35,14 @@ IoT-enabled assistive glasses for trusted person recognition. Helps visually imp
 - pip
 - Git
 - Arduino IDE 2.x (for ESP32 firmware)
-- A webcam or ESP32-CAM module
+- A webcam or ESP32-WROVER module
 - Supabase account (free tier) for cloud storage and logging
 
-## Gateway Setup (Track 1 — Laptop)
+---
 
-This is the critical path. Get this running first.
+## Gateway Setup (Local Development)
+
+If you want to run the gateway locally (e.g. to test code changes before deploying):
 
 ### 1. Clone the repo
 
@@ -29,11 +56,11 @@ cd FullStackIoT
 ```bash
 python -m venv venv
 
-# Windows
-venv\Scripts\activate
-
 # macOS/Linux
 source venv/bin/activate
+
+# Windows
+venv\Scripts\activate
 ```
 
 ### 3. Install Python dependencies
@@ -46,23 +73,21 @@ pip install -r requirements.txt
 
 | Package | Purpose |
 |---------|---------|
-| `fastapi` | Async HTTP server that receives images from ESP32-CAM and returns results |
+| `fastapi` | Async HTTP server that receives images from ESP32 and returns results |
 | `uvicorn` | ASGI server to run FastAPI |
 | `python-multipart` | Required for file upload handling in FastAPI |
 | `deepface` | Face detection, embedding extraction, and verification (ArcFace model) |
-| `opencv-python` | Image preprocessing |
+| `opencv-python-headless` | Image preprocessing (headless — no display required) |
+| `tensorflow` | Neural network backend for DeepFace |
 | `supabase` | Client for Supabase DB and Storage |
 | `python-dotenv` | Loads environment variables from `.env` file |
 | `bcrypt` | Password hashing for admin authentication |
-
-DeepFace will automatically download model weights on first run (~100–500 MB). Default model is ArcFace.
 
 ### 4. Configure environment variables
 
 Copy `.env.example` to `.env` and fill in your Supabase credentials:
 
 ```env
-PORT=5000
 CONFIDENCE_THRESHOLD=0.6
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-anon-key-here
@@ -71,7 +96,41 @@ SUPABASE_SERVICE_KEY=your-service-role-key-here
 
 Get both keys from: **Supabase dashboard → Project Settings → API**
 
-### 5. Supabase Setup
+### 5. Run the gateway server
+
+```bash
+cd gateway
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+Open `http://localhost:8000` in a browser. The web UI will load automatically.
+
+On first load, click **Admin** to create your admin account (one-time setup). After that, the admin panel is locked to that account only.
+
+> **Note:** First run downloads the ArcFace model weights (~137 MB). Subsequent runs load from cache. The embedding cache builds in the background on startup and takes ~15 min — see [Embedding Cache](#embedding-cache) below.
+
+---
+
+## Cloud Deployment
+
+The gateway runs on Google Cloud Run. To deploy a new version after making changes:
+
+```bash
+# 1. Build image — runs DeepFace on enrolled/ at build time (~5-10 min)
+gcloud builds submit --config cloudbuild.yaml .
+
+# 2. Deploy the built image
+gcloud run deploy glasstint-gateway \
+  --image us-central1-docker.pkg.dev/elemental-vent-492005-u1/cloud-run-source-deploy/glasstint-gateway \
+  --region us-central1 --allow-unauthenticated --memory 2Gi --timeout 300 --cpu-boost \
+  --set-env-vars "SUPABASE_URL=...,SUPABASE_KEY=...,SUPABASE_SERVICE_KEY=...,CONFIDENCE_THRESHOLD=0.6"
+```
+
+The Docker build (`Dockerfile`) pre-computes ArcFace embeddings for everyone in `enrolled/` via `precompute_embeddings.py` and bakes them into the image — so the deployed service loads embeddings instantly on every cold start.
+
+---
+
+## Supabase Setup
 
 Run the following in **Supabase → SQL Editor** to create the required tables:
 
@@ -105,12 +164,6 @@ create table enrolled_photos (
   created_at timestamptz default now()
 );
 
--- recognition_events table should already exist from initial setup
-```
-
-Also create the `recognition_events` table if it doesn't exist yet:
-
-```sql
 create table recognition_events (
   id uuid primary key default gen_random_uuid(),
   decision text,
@@ -129,34 +182,39 @@ create table recognition_events (
 2. Name: `enrolled-photos`, toggle **Public** → **OFF** (private)
 3. Click **Create bucket**
 
-#### Enrolling people
+---
+
+## Enrolling People
 
 ---
 
-> **Note for the GlassTint team:** The three initial team members (Anthony, Nedas, Natania) have already been enrolled in Supabase — photos are in the `enrolled-photos` bucket and rows exist in `enrolled_people` and `enrolled_photos`. You do not need to repeat the setup below unless you are redeploying from scratch. See the sections below for how to update your own photos or add new people.
+> **Note for the GlassTint team:** Anthony, Nedas, and Natania are already enrolled in Supabase — photos are in the `enrolled-photos` bucket and rows exist in `enrolled_people` and `enrolled_photos`. You do not need to repeat the setup below unless redeploying from scratch.
 
 ---
 
 **Adding a new trusted person (normal workflow):**
 
-Use the Admin panel in the web UI — enter their name, description (e.g. "Family", "Caregiver"), and upload 3–5 clear, well-lit front-facing photos. The admin panel uploads to Supabase Storage and creates all DB rows automatically. Nothing else needed.
+Use the Admin panel in the web UI — log in, then enter their name, a description (e.g. "Family", "Caregiver"), and upload 3–5 clear, well-lit front-facing photos. The admin panel uploads to Supabase Storage and creates all DB rows automatically.
 
-**Adding more photos of yourself / updating your photos:**
+After adding someone via the UI:
+- They will be recognized after ~15-20 min (background thread on the running container catches up from Supabase)
+- Or hit **POST `/reload-cache`** with your admin token to trigger an immediate refresh
+- To make them instant on future cold starts: add their photos to `enrolled/` and redeploy
 
-If you want to improve recognition accuracy by adding more reference photos, or replace existing ones:
+**Updating/replacing someone's photos:**
 
-1. Open the Admin panel → **Remove** your current entry (this deletes your photos from Storage and the DB)
-2. Re-enroll yourself with the full updated set of photos using the Add Trusted Person form
+There is no partial-update flow — remove and re-add is the cleanest approach:
 
-There is no partial-update flow — remove and re-add is the cleanest approach.
+1. Admin panel → **Remove** the person's entry (deletes photos from Storage and DB)
+2. Re-enroll with the full updated set of photos
 
-**Replicating this setup on a fresh Supabase project (e.g. a new deployment):**
+**Setting up from scratch on a fresh Supabase project:**
 
-If you are setting up a new Supabase project from scratch with existing local photos in `enrolled/`:
+If setting up a new Supabase project with existing local photos in `enrolled/`:
 
-1. Create the tables and bucket as described in steps above
+1. Create the tables and bucket as described above
 
-2. Upload each person's photos into the bucket manually — create one folder per person matching their name exactly:
+2. Upload each person's photos into the bucket — one folder per person, name must match exactly:
    ```
    enrolled-photos/
      Anthony/
@@ -167,59 +225,63 @@ If you are setting up a new Supabase project from scratch with existing local ph
        Nedas1.jpg
        ...
    ```
-   Do this via **Supabase dashboard → Storage → enrolled-photos → Upload files**. Filenames must not contain spaces.
+   Via **Supabase dashboard → Storage → enrolled-photos → Upload files**. Filenames must not contain spaces.
 
-3. Insert the people into the DB, then get their UUIDs:
+3. Insert the people into the DB:
    ```sql
    insert into enrolled_people (name, description) values
-     ('Anthony', 'your description here'),
-     ('Nedas',   'your description here'),
-     ('Natania', 'your description here');
+     ('Anthony', 'Brother'),
+     ('Nedas',   'Brother'),
+     ('Natania', 'Sister');
 
    select id, name from enrolled_people;
    ```
 
-4. Copy the UUIDs from step 3 into `supabase/seed_enrolled_photos.sql`, updating the paths to match your actual filenames, then run the file in the SQL Editor.
+4. Copy the UUIDs and insert the photo rows into `enrolled_photos`:
+   ```sql
+   insert into enrolled_photos (person_id, storage_path) values
+     ('<anthony-uuid>', 'Anthony/Anthony1.jpg'),
+     ('<anthony-uuid>', 'Anthony/Anthony2.jpg'),
+     ...
+   ```
 
-5. Verify the count matches your total number of uploaded photos:
+5. Verify:
    ```sql
    select count(*) from enrolled_photos;
    ```
 
-The `enrolled/` local folder is kept as a **fallback** — if Supabase Storage is unreachable, the gateway automatically falls back to the local photos.
+---
 
-### 6. Run the gateway server
+## Embedding Cache
 
-```bash
-cd gateway
-uvicorn app:app --host 0.0.0.0 --port 5000
-```
+Face recognition requires pre-computing an ArcFace embedding vector for each enrolled person's reference photo. There are two sources:
 
-Open `http://localhost:5000` in a browser. The web UI will load automatically.
+| Source | When loaded | Speed |
+|--------|------------|-------|
+| `enrolled/` local photos | Baked into Docker image at build time via `precompute_embeddings.py` | Instant on startup |
+| Supabase Storage photos | Background thread runs once per container start | ~15-20 min |
 
-On first load, click **🔐 Admin** to create your admin account (one-time setup). After that, the admin panel is locked to that account only — no one else can create an admin.
+The baked pickle handles the team's current enrolled people (Anthony, Natania, Nedas). Anyone added via the UI gets picked up by the background thread. Hit `/reload-cache` (admin token required) to force a refresh without restarting.
 
-### 7. Enroll trusted people
-
-Use the Admin panel in the web UI to add trusted people with reference photos and a description (e.g. "Family", "Caregiver", "Colleague"). Photos are uploaded to Supabase Storage automatically.
-
-An `enrolled/` directory is kept as a local fallback in case Supabase Storage is unreachable.
+---
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/verify` | Submit image for face verification. Returns name, confidence, trusted flag, description, and latency. |
-| `GET` | `/health` | Server health check + enrolled people list |
-| `GET` | `/enrolled` | List all enrolled people with description and photo count |
-| `POST` | `/enrolled` | Add a new trusted person (admin token required) |
-| `DELETE` | `/enrolled/{name}` | Remove a person and all their photos (admin token required) |
-| `GET` | `/events` | Paginated recognition history from Supabase |
-| `GET` | `/admin/status` | Check if admin account has been created |
-| `POST` | `/admin/setup` | One-time admin account creation (locked after first use) |
-| `POST` | `/admin/login` | Login, returns session token (24hr TTL) |
-| `POST` | `/admin/logout` | Invalidate session token |
-| `POST` | `/admin/change-password` | Update admin password (invalidates all other sessions) |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/verify` | None | Submit image for face verification. Returns name, confidence, trusted flag, description, latency. |
+| `GET` | `/health` | None | Server health check + enrolled people list |
+| `GET` | `/cache-status` | None | Number of loaded embeddings and ready state |
+| `GET` | `/enrolled` | None | List all enrolled people with description and photo count |
+| `POST` | `/enrolled` | Token | Add a new trusted person with reference photos |
+| `DELETE` | `/enrolled/{name}` | Token | Remove a person and all their photos |
+| `POST` | `/reload-cache` | Token | Trigger background reload of embeddings from Supabase |
+| `GET` | `/events` | None | Paginated recognition history from Supabase |
+| `GET` | `/admin/status` | None | Check if admin account has been created |
+| `POST` | `/admin/setup` | None | One-time admin account creation (locked after first use) |
+| `POST` | `/admin/login` | None | Login, returns 24hr session token |
+| `POST` | `/admin/logout` | Token | Invalidate session token |
+| `POST` | `/admin/change-password` | Token | Update admin password (invalidates all other sessions) |
 
 ### Verify response format
 
@@ -228,12 +290,12 @@ An `enrolled/` directory is kept as a local fallback in case Supabase Storage is
   "result": "Anthony",
   "trusted": true,
   "description": "Brother",
-  "confidence": 0.82,
-  "latency_ms": 3200
+  "confidence": 0.94,
+  "latency_ms": 1800
 }
 ```
 
-or for an unknown face:
+Unknown face:
 
 ```json
 {
@@ -241,96 +303,138 @@ or for an unknown face:
   "trusted": false,
   "description": null,
   "confidence": 0.0,
-  "latency_ms": 2800
+  "latency_ms": 1200
 }
 ```
 
-## ESP32-CAM Setup (Track 2 — MCU-A)
+---
 
-### 1. Configure and flash
+## MCU-A Setup (Freenove ESP32-WROVER)
 
-1. Open `esp32cam/capture_and_send.ino` in Arduino IDE
-2. Update Wi-Fi credentials and gateway IP in the sketch:
-   ```cpp
-   const char* ssid = "YOUR_WIFI_SSID";
-   const char* password = "YOUR_WIFI_PASSWORD";
-   const char* serverUrl = "http://LAPTOP_IP:5000/verify";
-   ```
-3. Select board: **Tools > Board > AI Thinker ESP32-CAM**
-4. Select port and upload
+MCU-A handles all vision and networking: captures JPEG on ESP-NOW trigger from MCU-B, POSTs to cloud gateway, sends result back to MCU-B via ESP-NOW.
 
-### 2. Wiring
+### 1. Board settings (Arduino IDE)
 
-- **Button:** GPIO 12 to GND (internal pull-up used)
-- **LED indicator:** GPIO 4 (built-in flash LED)
+- **Board:** `ESP32 Wrover Module`
+- **Partition Scheme:** `Huge APP (3MB No OTA)`
+- **Upload Speed:** 115200
 
-## Audio MCU Setup (Track 3 — MCU-B)
+### 2. WiFi credentials
 
-### 1. Flash the second ESP32
+Arduino cannot read `.env` files. Credentials live in a gitignored `secrets.h` file:
 
-1. Open `esp32audio/speak_result.ino` in Arduino IDE
-2. Update Wi-Fi credentials
-3. Select board: **Tools > Board > ESP32 Dev Module**
-4. Upload
+```bash
+# In capture_and_send/
+cp secrets.h.example secrets.h
+# Edit secrets.h and fill in your WiFi network
+```
 
-The audio MCU calls `/verify` with the captured image and speaks the result using TTS. The response includes `trusted`, `result` (name), and `description` — the spoken output is:
-- **Trusted:** `"Trusted. [Name]. [Description]."`
-- **Unknown:** `"Unknown person detected."`
+```cpp
+// secrets.h — do not commit
+#define WIFI_SSID     "your-network-name"
+#define WIFI_PASSWORD "your-password"
+```
 
-### 2. Wiring
+Arduino IDE automatically includes all `.h` files in the sketch folder — `secrets.h` is available to the sketch without any extra steps.
 
-- **Speaker + amplifier:** DAC output (GPIO 25) to amplifier input
-- **Amplifier output:** to speaker terminals
-- **Button (optional):** GPIO 12 to GND
+### 3. MCU-B MAC address
+
+Once your teammate sends you MCU-B's MAC address, fill it in at the top of `capture_and_send.ino`:
+
+```cpp
+uint8_t MCU_B_MAC[6] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
+```
+
+Leave all `0xFF` for **Solo Test Mode** — type anything in Serial Monitor to trigger a capture. Result prints to Serial only, no ESP-NOW send needed.
+
+### 4. Wiring (MCU-A)
+
+MCU-A is camera-only. The OV2640 camera module connects via the ribbon cable to the Freenove WROVER's ZIF connector — no extra wiring needed beyond the ribbon.
+
+| Camera module pin | Connect to |
+|-------------------|------------|
+| OV2640 ribbon     | WROVER ZIF connector (latch must be locked) |
+
+### 5. Gateway URL
+
+The sketch points to the live cloud gateway by default — no changes needed. For local testing, update line 16 in `capture_and_send.ino`:
+
+```cpp
+const char* GATEWAY_URL = "http://YOUR_LAPTOP_IP:8000/verify";
+```
+
+---
+
+## MCU-B Setup (Audio/Control ESP32)
+
+MCU-B handles user input and feedback: button press triggers a CAPTURE command to MCU-A via ESP-NOW, and receives the result back to drive LED and audio.
+
+### 1. Wiring (MCU-B)
+
+| Component | GPIO | Notes |
+|-----------|------|-------|
+| Trigger button | GPIO 12 | Button to GND, internal pull-up |
+| Status LED | GPIO 4 | LED + 330Ω resistor to GND |
+| Speaker + amplifier | GPIO 25 (DAC) | DAC out → amplifier input → speaker |
+| Battery monitor | GPIO 34 (ADC) | Voltage divider from LiPo+ |
+| LiPo battery | VIN / GND | Via USB-C charge module |
+
+### 2. ESP-NOW pairing
+
+MCU-A and MCU-B communicate over ESP-NOW (direct 2.4 GHz radio, no router needed). Both boards must exchange MAC addresses:
+
+1. Flash MCU-A — Serial Monitor prints `MCU-A MAC: XX:XX:XX:XX:XX:XX`
+2. Flash MCU-B — Serial Monitor prints `MCU-B MAC: XX:XX:XX:XX:XX:XX`
+3. Put MCU-A's MAC into MCU-B's sketch and MCU-B's MAC into MCU-A's `MCU_B_MAC` array
+4. Reflash both
+
+Both boards must be on the same WiFi channel. Set `peerInfo.channel = 0` on both (auto-follows WiFi channel).
+
+---
 
 ## Security Notes
 
-### Current setup (development/demo)
+### Current setup (demo)
 
-The `/verify` endpoint accepts image uploads from any client that can reach port 5000. This is acceptable for a local demo where the gateway is on a private network.
+The `/verify` endpoint accepts image uploads from any client that can reach the Cloud Run URL. Acceptable for a demo — Cloud Run enforces HTTPS for all traffic.
 
 ### Production hardening
 
-For a deployed or public-facing version, the recommended approach is:
-
-1. **TLS via reverse proxy** — run nginx in front of uvicorn with a Let's Encrypt certificate so all traffic is encrypted:
-   ```nginx
-   server {
-       listen 443 ssl;
-       ssl_certificate /etc/letsencrypt/live/yourdomain/fullchain.pem;
-       ssl_certificate_key /etc/letsencrypt/live/yourdomain/privkey.pem;
-       location / { proxy_pass http://127.0.0.1:5000; }
-   }
-   ```
-
-2. **Device API key** — add a pre-shared key header check on `/verify` so only authorized devices (ESP32s) can submit images:
+1. **Device API key** — add a pre-shared key header check on `/verify` so only authorized ESP32 devices can submit:
    ```python
-   # In the verify endpoint
    if x_api_key != os.getenv("DEVICE_API_KEY"):
        raise HTTPException(status_code=401)
    ```
-   The ESP32 would include `X-Api-Key: <key>` in its POST request.
+   The ESP32 would include `X-Api-Key: <key>` in its POST.
 
-3. **Rate limiting** — limit verify requests per device to prevent abuse.
+2. **Rate limiting** — limit verify requests per device ID to prevent abuse.
 
-The admin panel already uses token-based authentication (bcrypt + 24-hour session tokens). Only one admin account can ever be created — the setup endpoint is permanently locked after first use.
+The admin panel already uses token-based authentication (bcrypt + 24-hour session tokens). Only one admin account can ever be created — setup endpoint is permanently locked after first use.
+
+---
 
 ## Project Structure
 
 ```
 FullStackIoT/
   gateway/
-    app.py              # FastAPI server — verification, enrolled management, admin auth
+    app.py                    # FastAPI server — verification, enrollment, admin auth
   frontend/
-    index.html          # Web UI — verify tab, history tab, admin panel
+    index.html                # Web UI — verify tab, history tab, admin panel
   enrolled/
-    [Name]/             # Local fallback reference photos (Supabase Storage is primary)
-  supabase/
-    seed_enrolled_photos.sql  # SQL for seeding enrolled_photos table manually
-  .env                  # Environment config (not committed)
-  .env.example          # Template for .env
-  requirements.txt      # Python dependencies
+    [Name]/                   # Local reference photos (baked into Docker image at build time)
+  capture_and_send/
+    capture_and_send.ino      # MCU-A firmware — camera, HTTPS POST, ESP-NOW
+    secrets.h.example         # WiFi credentials template (copy to secrets.h, gitignored)
+  Dockerfile                  # Cloud Run container — pre-computes embeddings at build time
+  cloudbuild.yaml             # Cloud Build config — pushes image to Artifact Registry
+  Procfile                    # Startup command for local/cloud
+  precompute_embeddings.py    # Runs during Docker build to bake embeddings into image
+  requirements.txt            # Python dependencies
+  .env.example                # Environment variable template
 ```
+
+---
 
 ## Quick Test (No Hardware)
 
@@ -338,42 +442,56 @@ FullStackIoT/
 # 1. Activate venv and start server
 source venv/bin/activate
 cd gateway
-uvicorn app:app --host 0.0.0.0 --port 5000
+uvicorn app:app --host 0.0.0.0 --port 8000
 
-# 2. Open http://localhost:5000
+# 2. Open http://localhost:8000
 # 3. Drop a photo into the Verify tab and click Run Verification
 # 4. Or test via curl:
-curl -X POST -F "image=@path/to/photo.jpg" http://localhost:5000/verify
+curl -X POST -F "image=@path/to/photo.jpg" http://localhost:8000/verify
 ```
+
+Or test against the live cloud URL directly — no local setup needed.
+
+---
 
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| `ModuleNotFoundError: No module named 'cv2'` | Run `pip install opencv-python` |
-| DeepFace model download hangs | Check internet connection; models are ~100–500 MB, first run is slow |
+| `/verify` returns `unknown` right after cold start | Normal — wait 15-20 min for background thread, or hit `/reload-cache` after logging in |
+| `/cache-status` shows 0 embeddings | Background thread still running or crashed — check Cloud Run logs |
+| `ModuleNotFoundError: No module named 'cv2'` | Run `pip install opencv-python-headless` (not `opencv-python`) |
+| DeepFace model download hangs | Check internet; ArcFace weights are ~137 MB, first run is slow |
 | `(trapped) error reading bcrypt version` | Old passlib/bcrypt conflict — ensure `passlib` is not installed, only `bcrypt>=4.0.0` |
-| ESP32-CAM won't connect to Wi-Fi | Verify SSID/password; ensure 2.4 GHz network (not 5 GHz) |
+| ESP32 won't connect to Wi-Fi | Check `secrets.h` credentials; ensure 2.4 GHz network (not 5 GHz) |
 | `ConnectionRefused` from ESP32 | Check laptop firewall; ensure uvicorn binds to `0.0.0.0` not `127.0.0.1` |
-| Low confidence scores | Add more enrolled photos with varied lighting/angles |
-| `CAMERA_INIT_FAILED` on ESP32-CAM | Check camera ribbon cable connection; try power cycling |
+| ESP32 HTTPS connection fails | Confirm `WiFiClientSecure.setInsecure()` is called before `http.begin()` — already done in sketch |
+| `CAMERA_INIT_FAILED` on ESP32 | Check ribbon cable is fully seated and ZIF latch is locked; power cycle |
+| Low confidence scores | Add more enrolled photos with varied lighting and angles (3-5 minimum) |
 | Storage photos `not_found` | Filenames in `enrolled_photos` table must exactly match filenames in Supabase Storage bucket |
-| Description not appearing in TTS | Hard refresh browser (Cmd+Shift+R) to clear JS cache |
+| Description not appearing in results | Hard refresh browser (Cmd+Shift+R) to clear JS cache |
+| Cloud Build fails at Dockerfile parse | Multi-line `python -c "..."` breaks Cloud Build's Docker parser — use a `.py` file instead (see `precompute_embeddings.py`) |
+| `gcr.io repo does not exist` on deploy | Use `cloudbuild.yaml` which pushes to Artifact Registry (`us-central1-docker.pkg.dev`) |
+
+---
 
 ## Hardware BOM
 
 | Part | Purpose | Cost |
 |------|---------|------|
-| ESP32-CAM (from kit) | Image capture MCU | $0 |
-| ESP32 Dev Board (from kit) | Audio/control MCU | $0 |
-| Speaker + amplifier (from kit) | Audio feedback | $0 |
-| Tactile buttons (from kit) | User input | $0 |
+| Freenove ESP32-WROVER Kit | MCU-A — camera + WiFi | $0 (from kit) |
+| ESP32 Dev Board | MCU-B — button, LED, audio, battery | $0 (from kit) |
+| OV2640 Camera Module | Image capture (ribbon to WROVER) | $0 (from kit) |
+| Speaker + amplifier | Audio feedback | $0 (from kit) |
+| Tactile buttons | User input | $0 (from kit) |
 | Glasses frame | Wearable mount | $10 |
 | LiPo battery | Portable power | $10 |
 | USB-C charge module | Battery charging | $6 |
-| 3D print material | Camera mount | $5 |
-| Enclosure accessories | Protection | $7 |
+| 3D print material | Camera mount for glasses | $5 |
+| Enclosure accessories | Protection and mounting | $7 |
 | **Total** | | **$38** |
+
+---
 
 ## Team
 

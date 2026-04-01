@@ -1,3 +1,6 @@
 .env
 /venv
 /gateway/__pycache__
+secrets.h
+*.DS_Store
+enrolled_embeddings.pkl
