@@ -275,11 +275,25 @@ void sendResult(bool trusted, const char* name, const char* desc, int conf_pct) 
   strncpy(msg.name,        name, sizeof(msg.name) - 1);
   strncpy(msg.description, desc, sizeof(msg.description) - 1);
 
-  delay(1000);  // let radio settle after HTTP
-  esp_err_t res = esp_now_send(MCU_B_MAC, (uint8_t*)&msg, sizeof(msg));
-  Serial.printf("sendResult → trusted=%d name=%s conf=%d%% (%s)\n",
-    msg.trusted, msg.name, msg.confidence_pct,
-    res == ESP_OK ? "queued" : "send error");
+  delay(500);
+
+  // re-register peer — HTTP can disrupt ESP-NOW peer state
+  esp_now_del_peer(MCU_B_MAC);
+  memset(&peerInfo, 0, sizeof(peerInfo));
+  memcpy(peerInfo.peer_addr, MCU_B_MAC, 6);
+  peerInfo.channel = WiFi.channel();
+  peerInfo.ifidx   = WIFI_IF_STA;
+  peerInfo.encrypt = false;
+  esp_now_add_peer(&peerInfo);
+
+  for (int i = 0; i < 3; i++) {
+    esp_err_t res = esp_now_send(MCU_B_MAC, (uint8_t*)&msg, sizeof(msg));
+    Serial.printf("sendResult attempt %d → trusted=%d name=%s conf=%d%% (%s)\n",
+      i + 1, msg.trusted, msg.name, msg.confidence_pct,
+      res == ESP_OK ? "queued" : "send error");
+    if (res == ESP_OK) break;
+    delay(300);
+  }
 }
 
 // ── Arduino entry points ──────────────────────────────────────────────────────

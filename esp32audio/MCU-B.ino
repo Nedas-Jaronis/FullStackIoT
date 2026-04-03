@@ -2,9 +2,8 @@
 #include <esp_now.h>
 #include "Audio.h"
 
-// WiFi config (needed for Google TTS streaming)
-const char* ssid = "";
-const char* password = "";
+// WiFi config from secrets.h (needed for Google TTS streaming)
+#include "secrets.h"
 
 // Pin assignments
 #define BUTTON_PIN    13
@@ -40,6 +39,7 @@ TriggerMsg triggerOut;
 ResultMsg  resultIn;
 volatile bool resultReady = false;
 volatile bool listening = false; // only accept results when we're waiting for one
+bool audioAllowed = false; // only run audio.loop() when we want audio
 
 // LED helpers
 void ledsOff() {
@@ -77,17 +77,28 @@ void speakText(String text) {
     }
   }
 
-  String url = "http://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=" + encoded;
+  String url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=" + encoded;
   Serial.println("Speaking: " + text);
+  audioAllowed = true;
   audio.connecttohost(url.c_str());
 
-  // wait for audio to finish playing (timeout after 10 seconds)
+  // wait for first complete playthrough then kill connection
   unsigned long ttsStart = millis();
-  while (audio.isRunning() && (millis() - ttsStart < 10000)) {
+  bool started = false;
+  while (millis() - ttsStart < 10000) {
     audio.loop();
+    if (audio.isRunning()) {
+      started = true;
+    } else if (started) {
+      break;
+    }
     delay(1);
   }
-  audio.stopSong(); // force stop if still running
+  // fully kill audio so it can't replay
+  audio.stopSong();
+  audioAllowed = false;
+  audio.setPinout(I2S_BCK, I2S_LCK, I2S_DIN);
+  delay(300);
 }
 
 // ESP-NOW callbacks (v2.x API)
@@ -116,7 +127,7 @@ void setup() {
 
   // WiFi (needed for TTS streaming and ESP-NOW)
   WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -153,7 +164,7 @@ void setup() {
 }
 
 void loop() {
-  audio.loop(); // keep audio streaming
+  if (audioAllowed) audio.loop(); // only process audio when we want it
 
   // wait for button press
   if (digitalRead(BUTTON_PIN) == LOW) {
@@ -170,11 +181,22 @@ void loop() {
       strcpy(triggerOut.cmd, "CAPTURE");
       esp_now_send(mcuA_address, (uint8_t *)&triggerOut, sizeof(triggerOut));
 
-      // wait for result from MCU-A (timeout after 25 seconds)
+      // wait for result from MCU-A (timeout 90s, hold button 2s to cancel)
       unsigned long start = millis();
-      while (!resultReady && (millis() - start < 25000)) {
-        audio.loop();
-        delay(100);
+      unsigned long holdStart = 0;
+      while (!resultReady && (millis() - start < 90000)) {
+        if (audioAllowed) audio.loop();
+        // hold button for 2 seconds to cancel
+        if (digitalRead(BUTTON_PIN) == LOW) {
+          if (holdStart == 0) holdStart = millis();
+          if (millis() - holdStart > 2000) {
+            Serial.println("Cancelled by button hold");
+            break;
+          }
+        } else {
+          holdStart = 0;
+        }
+        delay(50);
       }
 
       if (resultReady) {
@@ -198,7 +220,8 @@ void loop() {
         showUnknown();
       }
 
-      // drain any retries that arrived during speech
+      // stop any lingering audio and drain retries
+      audio.stopSong();
       resultReady = false;
       delay(500);
       resultReady = false;
