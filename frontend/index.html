@@ -7,15 +7,37 @@
   <link href="https://fonts.googleapis.com/css2?family=Share+Arial&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #a277c7;
-      --panel: #8147a0;
-      --border: #4e8e98;
-      --accent: #6bc0d1e3;
-      --accent2: #522574;
-      --warn: #ff6b35;
-      --text: #c9d6e3;
-      --text-dim: #4a3344;
-      --glow: 0 0 12px rgb(90, 24, 108);
+      --bg:          #0a0c10;
+      --surface:     #11141c;
+      --surface2:    #181c27;
+      --border:      rgba(255, 255, 255, 0.07);
+      --accent:      #4f8ef7;
+      --accent-dim:  rgba(79, 142, 247, 0.15);
+      --green:       #22c55e;
+      --green-dim:   rgba(34, 197, 94, 0.12);
+      --red:         #ef4444;
+      --red-dim:     rgba(239, 68, 68, 0.12);
+      --text:        #e2e8f0;
+      --text-muted:  #64748b;
+      --radius:      14px;
+      --radius-sm:   8px;
+      --transition:  0.2s ease;
+    }
+
+    /* ── Light Mode Variables ────────────────────────────────── */
+    :root.light {
+      --bg:          #f0f2f7;
+      --surface:     #ffffff;
+      --surface2:    #e8ecf4;
+      --border:      rgba(0, 0, 0, 0.08);
+      --accent:      #3b7ff5;
+      --accent-dim:  rgba(59, 127, 245, 0.12);
+      --green:       #22c55e;
+      --green-dim:   rgba(34, 197, 94, 0.12);
+      --red:         #ef4444;
+      --red-dim:     rgba(239, 68, 68, 0.12);
+      --text:        #e2e8f0;
+      --text-muted:  #64748b;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-weight: bold }
