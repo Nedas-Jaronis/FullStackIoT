@@ -9,7 +9,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:          #0a0c10;
+      --bg:          #121a28;
       --surface:     #11141c;
       --surface2:    #181c27;
       --border:      rgba(255, 255, 255, 0.07);
@@ -20,7 +20,7 @@
       --red:         #ef4444;
       --red-dim:     rgba(239, 68, 68, 0.12);
       --text:        #e2e8f0;
-      --text-muted:  #64748b;
+      --text-muted:  #94a3b8;
       --radius:      14px;
       --radius-sm:   8px;
       --transition:  0.2s ease;
@@ -28,9 +28,9 @@
 
     /* ── Light Mode Variables ────────────────────────────────── */
     :root.light {
-      --bg:          #c9cbd0;
-      --surface:     #efecec;
-      --surface2:    #efecec;
+      --bg:          #f1f5f9;
+      --surface:     #ffffff;
+      --surface2:    #e8ecf4;
       --border:      rgba(0, 0, 0, 0.08);
       --accent:      #3b7ff5;
       --accent-dim:  rgba(59, 127, 245, 0.12);
@@ -74,8 +74,11 @@
     :root.light header { background: rgba(255, 255, 255, 0.85); }
 
     /* Fix drop overlay in light mode */
-    :root.light .drop-overlay {background: rgba(240, 242, 247, 0.75); }
-
+    :root.light .drop-overlay { background: rgba(240, 242, 247, 0.75); }
+    :root.light .drop-sublabel { color: #55585e; }
+    :root.light .result-card{ color: #374151; }
+    :root.light .drop-overlay { background: #ffffff; border-bottom: 1px solid #e2e8f0; }
+    
     /* Fix spinner in light mode */
     :root.light .spinner {
       border-color:rgba(0, 0, 0, 0.15);
@@ -254,7 +257,7 @@
 
     .drop-icon { font-size: 36px; opacity: 0.4; }
     .drop-label { font-size: 14px; color: var(--text-muted); text-align: center; }
-    .drop-sublabel { font-size: 12px; color: var(--text-muted); opacity: 0.6; }
+    .drop-sublabel { font-size: 14px; color: var(--text-muted); opacity: 0.6; }
 
     #file-input { display: none; }
 
@@ -587,7 +590,7 @@
 
     /* ── Section labels ───────────────────────────────────── */
     .section-label {
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.8px;
@@ -714,7 +717,7 @@
 
           <div class="result-card" id="result-card">
             <div style="font-size:36px;opacity:0.2">👤</div>
-            <div style="color:var(--text-muted);font-size:14px">
+            <div style="color:var(--text-muted);font-size:16px">
               Upload an image and run verification
             </div>
           </div>
