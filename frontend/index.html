@@ -12,18 +12,64 @@
       --bg:          #0a0c10;
       --surface:     #11141c;
       --surface2:    #181c27;
-      --border:      rgba(255,255,255,0.07);
+      --border:      rgba(255, 255, 255, 0.07);
       --accent:      #4f8ef7;
-      --accent-dim:  rgba(79,142,247,0.15);
+      --accent-dim:  rgba(79, 142, 247, 0.15);
       --green:       #22c55e;
-      --green-dim:   rgba(34,197,94,0.12);
+      --green-dim:   rgba(34, 197, 94, 0.12);
       --red:         #ef4444;
-      --red-dim:     rgba(239,68,68,0.12);
+      --red-dim:     rgba(239, 68, 68, 0.12);
       --text:        #e2e8f0;
       --text-muted:  #64748b;
       --radius:      14px;
       --radius-sm:   8px;
       --transition:  0.2s ease;
+    }
+
+    /* ── Light Mode Variables ────────────────────────────────── */
+    :root.light {
+      --bg:          #f0f2f7;
+      --surface:     #ffffff;
+      --surface2:    #e8ecf4;
+      --border:      rgba(0, 0, 0, 0.08);
+      --accent:      #3b7ff5;
+      --accent-dim:  rgba(59, 127, 245, 0.12);
+      --green:       #22c55e;
+      --green-dim:   rgba(34, 197, 94, 0.12);
+      --red:         #ef4444;
+      --red-dim:     rgba(239, 68, 68, 0.12);
+      --text:        #e2e8f0;
+      --text-muted:  #64748b;
+    }
+
+    /* ── Theme Toggle Button ────────────────────────────────── */
+    .theme-toggle {
+      background: var(--surface2);
+      border: 1px solid var(--border);  
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 7px 10px;
+      font-size: 16px;
+      display: flex; 
+      align-items: center; 
+      gap: 6px;  
+      transition: all var(--transition);
+      line-height: 1;
+    }
+
+    .theme-toggle:hover { color: var(--text); border-color: rgba(128, 128, 128, 0.3); }
+
+    /* Fix header background in light mode */
+    :root.light header { background: rgba(255, 255, 255, 0.85); }
+
+    /* Fix drop overlay in light mode */
+    :root.light .drop-overlay {background: rgba(240, 242, 247, 0.75); }
+
+    /* Fix spinner in light mode */
+    :root.light .spinner {
+      border-color:rgba(0, 0, 0, 0.15);
+      border-top-color: #fff;
     }
 
     html, body {
@@ -598,6 +644,7 @@
       GlassTint
     </div>
     <div class="header-right">
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
       <div class="tts-indicator" id="tts-indicator">
         <div class="tts-wave">
           <span></span><span></span><span></span><span></span>
@@ -1335,6 +1382,31 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
   }
+
+  // ── Theme Toggle ─────────────────────────────────────────────
+  function toggleTheme() {
+    const root = document.documentElement;
+    const btn = document.getElementById('theme-toggle');
+    const isLight = root.classList.toggle('light');
+
+    btn.textContent = isLight ? '☀️' : '🌙';
+    localStorage.setItem('glasstint-theme', isLight ? 'light' : 'dark');
+  }
+
+  // apply saved theme whenever page loads
+  (function() {
+    const saved = localStorage.getItem('glasstint-theme');
+
+    if (saved == 'light') {
+      document.documentElement.classList.add('light');
+
+      const btn = document.getElementById('theme-toggle');
+
+      if (btn) btn.textContent = '☀️';
+    }
+  })();
+
+  
 
   // ── Init ──────────────────────────────────────────────────
   checkHealth();
