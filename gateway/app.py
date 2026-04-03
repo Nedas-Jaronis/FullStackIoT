@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import bcrypt
+import threading
 import numpy as np
 from deepface import DeepFace
 from supabase import create_client
@@ -178,7 +179,9 @@ def build_embedding_cache(enrolled_dir: Path):
                     })
                     print(f"  cached {person_dir.name}/{ref_image.name}")
             except Exception as e:
+                import traceback
                 print(f"  skipping {ref_image.name}: {e}")
+                print(traceback.format_exc())
 
     embedding_cache = new_cache
     print(f"Cache ready: {len(embedding_cache)} embeddings for {len(set(e['name'] for e in embedding_cache))} people")
@@ -262,17 +265,37 @@ app.add_middleware(
 )
 
 
-# build embedding cache on startup so scans are fast
+# build embedding cache in background so server starts immediately
+# (Cloud Run needs port 8080 open before loading embeddings)
 @app.on_event("startup")
 async def startup():
-    load_and_cache_embeddings()
+    global embedding_cache
+    # Load pre-computed embeddings from Docker build (instant, no GPU needed)
+    pkl = Path(__file__).resolve().parent.parent / "enrolled_embeddings.pkl"
+    if pkl.exists():
+        import pickle
+        raw = pickle.load(open(pkl, "rb"))
+        embedding_cache = [
+            {"name": e["name"], "embedding": np.array(e["embedding"]), "source": e["source"]}
+            for e in raw
+        ]
+        print(f"Loaded {len(embedding_cache)} pre-computed embeddings from pickle")
+    # Update from Supabase in background to pick up any new enrollments
+    thread = threading.Thread(target=load_and_cache_embeddings, daemon=True)
+    thread.start()
+
+
+@app.get("/cache-status")
+async def cache_status():
+    return {"cached_embeddings": len(embedding_cache), "ready": len(embedding_cache) > 0}
 
 
 # endpoint to reload cache after enrolling new people
 @app.post("/reload-cache")
 async def reload_cache(_=Depends(require_auth)):
-    load_and_cache_embeddings()
-    return {"status": "ok", "cached": len(embedding_cache)}
+    thread = threading.Thread(target=load_and_cache_embeddings, daemon=True)
+    thread.start()
+    return {"status": "reloading", "current_cached": len(embedding_cache), "message": "Reload started in background. Poll /cache-status to track progress."}
 
 
 # ── Verification ─────────────────────────────────────────────────────────────────

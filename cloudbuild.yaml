@@ -1,0 +1,13 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - build
+  - -t
+  - us-central1-docker.pkg.dev/elemental-vent-492005-u1/cloud-run-source-deploy/glasstint-gateway
+  - .
+  timeout: '1200s'
+
+images:
+- us-central1-docker.pkg.dev/elemental-vent-492005-u1/cloud-run-source-deploy/glasstint-gateway
+
+timeout: '1500s'
