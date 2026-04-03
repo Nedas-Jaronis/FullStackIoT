@@ -38,9 +38,19 @@
       --green-dim:   rgba(34, 197, 94, 0.12);
       --red:         #ef4444;
       --red-dim:     rgba(239, 68, 68, 0.12);
-      --text:        #000000;
-      --text-muted:  #000000;
+      --text:        #0f172a;
+      --text-muted:  #374151;
     }
+
+    :root.light .logo { color: #0f172a; }
+    :root.light .tab-btn { color: #374151; }
+    :root.light .tab-btn.active { color: #0f172a; }
+    :root.light .enrolled-chip { color: #0f172a; }
+    :root.light .section-label { color: #374151; }
+    :root.light .events-table th { color: #374151; }
+    :root.light .events-table td { color: #0f172a; }
+    :root.light .result-meta { color: #374151; }
+    :root.light .result-description { color: #374151; }
 
     /* ── Theme Toggle Button ────────────────────────────────── */
     .theme-toggle {
