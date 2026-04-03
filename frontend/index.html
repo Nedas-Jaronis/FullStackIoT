@@ -2,1470 +2,384 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GlassTint — Face Verification</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ESP32 Firebase Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Arial&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    /* ── Reset & Base ─────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:          #0a0c10;
-      --surface:     #11141c;
-      --surface2:    #181c27;
-      --border:      rgba(255, 255, 255, 0.07);
-      --accent:      #4f8ef7;
-      --accent-dim:  rgba(79, 142, 247, 0.15);
-      --green:       #22c55e;
-      --green-dim:   rgba(34, 197, 94, 0.12);
-      --red:         #ef4444;
-      --red-dim:     rgba(239, 68, 68, 0.12);
-      --text:        #e2e8f0;
-      --text-muted:  #64748b;
-      --radius:      14px;
-      --radius-sm:   8px;
-      --transition:  0.2s ease;
+      --bg: #a277c7;
+      --panel: #8147a0;
+      --border: #4e8e98;
+      --accent: #6bc0d1e3;
+      --accent2: #522574;
+      --warn: #ff6b35;
+      --text: #c9d6e3;
+      --text-dim: #4a3344;
+      --glow: 0 0 12px rgb(90, 24, 108);
     }
 
-    /* ── Light Mode Variables ────────────────────────────────── */
-    :root.light {
-      --bg:          #c9cbd0;
-      --surface:     #efecec;
-      --surface2:    #efecec;
-      --border:      rgba(0, 0, 0, 0.08);
-      --accent:      #3b7ff5;
-      --accent-dim:  rgba(59, 127, 245, 0.12);
-      --green:       #22c55e;
-      --green-dim:   rgba(34, 197, 94, 0.12);
-      --red:         #ef4444;
-      --red-dim:     rgba(239, 68, 68, 0.12);
-      --text:        #000000;
-      --text-muted:  #000000;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-weight: bold }
 
-    /* ── Theme Toggle Button ────────────────────────────────── */
-    .theme-toggle {
-      background: var(--surface2);
-      border: 1px solid var(--border);  
-      border-radius: var(--radius-sm);
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 7px 10px;
-      font-size: 16px;
-      display: flex; 
-      align-items: center; 
-      gap: 6px;  
-      transition: all var(--transition);
-      line-height: 1;
-    }
-
-    .theme-toggle:hover { color: var(--text); border-color: rgba(128, 128, 128, 0.3); }
-
-    /* Fix header background in light mode */
-    :root.light header { background: rgba(255, 255, 255, 0.85); }
-
-    /* Fix drop overlay in light mode */
-    :root.light .drop-overlay {background: rgba(240, 242, 247, 0.75); }
-
-    /* Fix spinner in light mode */
-    :root.light .spinner {
-      border-color:rgba(0, 0, 0, 0.15);
-      border-top-color: #fff;
-    }
-
-    html, body {
-      height: 100%;
+    body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 15px;
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    /* ── Layout ───────────────────────────────────────────── */
-    .app {
-      display: flex;
-      flex-direction: column;
+      font-family: 'Arial', monospace;
       min-height: 100vh;
+      padding: 24px;
+      background-image:
+        radial-gradient(ellipse at 20% 10%, rgba(0,212,255,0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 90%, rgba(0,255,157,0.03) 0%, transparent 50%);
     }
 
     header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    header h1 {
+      font-family: 'Arial', monospace;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-shadow: var(--glow);
+      letter-spacing: 0.15em;
+    }
+
+    header p {
+      color: var(--text-dim);
+      font-size: 1rem;
+      margin-top: 6px;
+      letter-spacing: 0.1em;
+    }
+
+    #status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      margin-right: 8px;
+      vertical-align: middle;
+      transition: background 0.3s;
+    }
+    #status-dot.connected { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+      margin-top: 80px;
+      justify-content: center;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.6;
+    }
+
+    .card:hover { border-color: rgba(0,212,255,0.3); }
+
+    .card-label {
+      font-size: 0.89rem;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    /* LDR Gauge */
+    .gauge-track {
+      background: rgba(255,255,255,0.05);
+      border-radius: 999px;
+      height: 18px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #00d4ff, #00ff9d);
+      width: 0%;
+      transition: width 0.6s ease;
+      box-shadow: 0 0 10px rgba(0,212,255,0.5);
+    }
+
+    .gauge-value {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.8rem;
+      color: var(--accent);
+      text-shadow: var(--glow);
+    }
+
+    .gauge-sub {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    /* Toggle switch */
+    .toggle-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 18px 32px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(17,20,28,0.8);
-      backdrop-filter: blur(12px);
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      margin-top: 8px;
     }
 
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-    }
-
-    .logo-icon {
-      width: 32px; height: 32px;
-      background: linear-gradient(135deg, var(--accent), #7c3aed);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px;
-    }
-
-    .header-right { display: flex; align-items: center; gap: 12px; }
-
-    .status-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--text-muted);
-      transition: background var(--transition);
-    }
-    .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
-
-    .btn-icon {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 7px 12px;
-      font-size: 13px;
-      display: flex; align-items: center; gap: 6px;
-      transition: all var(--transition);
-    }
-    .btn-icon:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
-
-    main {
-      flex: 1;
-      max-width: 960px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 32px 24px 64px;
-    }
-
-    /* ── Tabs ─────────────────────────────────────────────── */
-    .tabs {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 32px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 5px;
-      width: fit-content;
-    }
-
-    .tab-btn {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 8px 20px;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all var(--transition);
-      display: flex; align-items: center; gap: 7px;
-    }
-    .tab-btn:hover { color: var(--text); }
-    .tab-btn.active {
-      background: var(--surface2);
+    .toggle-label {
+      font-size: 0.85rem;
       color: var(--text);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
     }
 
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-
-    /* ── Card ─────────────────────────────────────────────── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-    }
-
-    /* ── Drop Zone ────────────────────────────────────────── */
-    .verify-layout {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      align-items: start;
-    }
-
-    @media (max-width: 640px) { .verify-layout { grid-template-columns: 1fr; } }
-
-    .drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: var(--radius);
-      min-height: 280px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      cursor: pointer;
-      transition: all var(--transition);
+    .toggle {
       position: relative;
-      overflow: hidden;
-      background: var(--surface);
+      width: 52px;
+      height: 28px;
     }
 
-    .drop-zone:hover, .drop-zone.dragover {
-      border-color: var(--accent);
-      background: var(--accent-dim);
-    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
 
-    .drop-zone.has-image { border-style: solid; border-color: var(--border); }
-
-    .drop-zone img {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%;
-      object-fit: cover;
-      border-radius: 12px;
-    }
-
-    .drop-overlay {
-      position: absolute; inset: 0;
-      background: rgba(10,12,16,0.6);
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 12px;
-      opacity: 0;
-      transition: opacity var(--transition);
-    }
-    .drop-zone.has-image:hover .drop-overlay { opacity: 1; }
-
-    .drop-icon { font-size: 36px; opacity: 0.4; }
-    .drop-label { font-size: 14px; color: var(--text-muted); text-align: center; }
-    .drop-sublabel { font-size: 12px; color: var(--text-muted); opacity: 0.6; }
-
-    #file-input { display: none; }
-
-    /* ── Result Panel ─────────────────────────────────────── */
-    .result-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .result-card {
-      border-radius: var(--radius);
-      padding: 24px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      min-height: 200px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      text-align: center;
-      transition: all 0.3s ease;
-    }
-
-    .result-card.trusted {
-      border-color: var(--green);
-      background: var(--green-dim);
-    }
-
-    .result-card.unknown {
-      border-color: var(--red);
-      background: var(--red-dim);
-    }
-
-    .result-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      padding: 5px 14px;
-      border-radius: 100px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-    .result-badge.trusted { background: rgba(34,197,94,0.2); color: var(--green); }
-    .result-badge.unknown { background: rgba(239,68,68,0.2); color: var(--red); }
-
-    .result-name {
-      font-size: 28px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-
-    .result-description {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    /* Confidence bar */
-    .confidence-wrap { width: 100%; }
-    .confidence-label {
-      display: flex; justify-content: space-between;
-      font-size: 12px; color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-    .confidence-bar {
-      height: 6px;
-      background: var(--surface2);
-      border-radius: 100px;
-      overflow: hidden;
-    }
-    .confidence-fill {
-      height: 100%;
-      border-radius: 100px;
-      background: var(--green);
-      transition: width 0.6s cubic-bezier(0.16,1,0.3,1);
-      width: 0%;
-    }
-    .result-card.unknown .confidence-fill { background: var(--red); }
-
-    .result-meta {
-      display: flex; gap: 16px; font-size: 12px; color: var(--text-muted);
-    }
-
-    /* ── Buttons ──────────────────────────────────────────── */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      gap: 8px;
-      padding: 11px 22px;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: all var(--transition);
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-    }
-    .btn-primary:hover { background: #3b7ff5; }
-    .btn-primary:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    .btn-secondary {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
-    .btn-secondary:hover { border-color: rgba(255,255,255,0.2); }
-
-    .btn-full { width: 100%; }
-
-    /* ── Spinner ──────────────────────────────────────────── */
-    .spinner {
-      width: 20px; height: 20px;
-      border: 2px solid rgba(255,255,255,0.2);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      display: none;
-    }
-    .loading .spinner { display: block; }
-    .loading .btn-text { display: none; }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Enrolled Sidebar ─────────────────────────────────── */
-    .enrolled-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .enrolled-chip {
-      display: flex; align-items: center; gap: 6px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 100px;
-      padding: 4px 12px;
-      font-size: 13px;
-    }
-
-    .avatar {
-      width: 22px; height: 22px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent), #7c3aed);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 10px;
-      font-weight: 700;
-      color: #fff;
-      flex-shrink: 0;
-    }
-
-    /* ── History Tab ──────────────────────────────────────── */
-    .history-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 20px;
-    }
-
-    .history-title { font-size: 16px; font-weight: 600; }
-
-    .events-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    .events-table th {
-      text-align: left;
-      padding: 10px 14px;
-      color: var(--text-muted);
-      font-weight: 500;
-      font-size: 12px;
-      letter-spacing: 0.3px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .events-table td {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-    }
-
-    .events-table tr:last-child td { border-bottom: none; }
-
-    .events-table tr:hover td { background: var(--surface2); }
-
-    .pill {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 3px 10px;
-      border-radius: 100px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .pill.trusted { background: rgba(34,197,94,0.15); color: var(--green); }
-    .pill.unknown { background: rgba(239,68,68,0.15); color: var(--red); }
-
-    .conf-mini {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .conf-mini-bar {
-      width: 60px; height: 4px;
-      background: var(--surface2);
-      border-radius: 100px;
-      overflow: hidden;
-    }
-    .conf-mini-fill {
-      height: 100%;
-      border-radius: 100px;
-      background: var(--green);
-    }
-    .unknown .conf-mini-fill { background: var(--red); }
-
-    .empty-state {
-      text-align: center;
-      padding: 60px 24px;
-      color: var(--text-muted);
-    }
-    .empty-state-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
-
-    /* ── Admin Modal ──────────────────────────────────────── */
-    .modal-backdrop {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(4px);
-      display: none;
-      align-items: flex-start;
-      justify-content: center;
-      z-index: 200;
-      padding: 24px 16px;
-      overflow-y: auto;
-    }
-    .modal-backdrop.open { display: flex; }
-
-    .modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 28px;
-      width: 100%;
-      max-width: 420px;
-      position: relative;
-      flex-shrink: 0;
-    }
-
-    .modal-title {
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    .modal-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 22px; }
-
-    .form-group { margin-bottom: 16px; }
-    .form-label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 7px;
-    }
-    .form-input {
-      width: 100%;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text);
-      font-size: 14px;
-      padding: 10px 14px;
-      outline: none;
-      transition: border-color var(--transition);
-    }
-    .form-input:focus { border-color: var(--accent); }
-    .form-input::placeholder { color: var(--text-muted); }
-
-    .modal-close {
+    .toggle-slider {
       position: absolute;
-      top: 16px; right: 16px;
-      background: none; border: none;
-      color: var(--text-muted); cursor: pointer;
-      font-size: 20px; line-height: 1;
-      transition: color var(--transition);
-    }
-    .modal-close:hover { color: var(--text); }
-
-    .admin-panel { display: none; }
-    .admin-panel.unlocked { display: block; }
-
-    .alert {
-      padding: 10px 14px;
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-      margin-bottom: 16px;
-      display: none;
-    }
-    .alert.show { display: block; }
-    .alert-error { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
-    .alert-success { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
-
-    /* ── TTS indicator ────────────────────────────────────── */
-    .tts-indicator {
-      display: none;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .tts-indicator.speaking { display: flex; }
-    .tts-wave { display: flex; gap: 2px; align-items: center; }
-    .tts-wave span {
-      display: block; width: 3px; border-radius: 2px;
-      background: var(--accent);
-      animation: wave 0.8s ease-in-out infinite;
-    }
-    .tts-wave span:nth-child(1) { height: 8px; animation-delay: 0s; }
-    .tts-wave span:nth-child(2) { height: 14px; animation-delay: 0.15s; }
-    .tts-wave span:nth-child(3) { height: 10px; animation-delay: 0.3s; }
-    .tts-wave span:nth-child(4) { height: 6px; animation-delay: 0.45s; }
-    @keyframes wave {
-      0%, 100% { transform: scaleY(0.5); }
-      50% { transform: scaleY(1); }
+      inset: 0;
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background 0.3s;
     }
 
-    /* ── Section labels ───────────────────────────────────── */
-    .section-label {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--text-muted);
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      top: 3px;
+      left: 3px;
+      transition: transform 0.3s, background 0.3s;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background: rgba(0,255,157,0.15);
+      border-color: var(--accent2);
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(24px);
+      background: var(--accent2);
+      box-shadow: 0 0 8px var(--accent2);
+    }
+
+    .btn-status {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-top: 12px;
+      letter-spacing: 0.1em;
+    }
+
+    .btn-status span {
+      color: var(--accent2);
+    }
+
+    /* Sliders */
+    .slider-value {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.4rem;
+      color: var(--accent);
+      text-shadow: var(--glow);
       margin-bottom: 12px;
     }
 
-    .divider {
-      height: 1px;
-      background: var(--border);
-      margin: 20px 0;
-    }
-
-    /* ── Toast ────────────────────────────────────────────── */
-    #toast {
-      position: fixed;
-      bottom: 24px; right: 24px;
-      background: var(--surface);
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      outline: none;
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 12px 18px;
-      font-size: 13px;
-      opacity: 0;
-      transform: translateY(8px);
-      transition: all 0.3s ease;
-      pointer-events: none;
-      z-index: 300;
-      max-width: 300px;
-    }
-    #toast.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    /* pagination */
-    .pagination {
-      display: flex; align-items: center; justify-content: center;
-      gap: 8px; margin-top: 20px;
-    }
-    .page-info { font-size: 13px; color: var(--text-muted); }
-
-    /* file drop zone inside admin */
-    .photo-drop {
-      border: 2px dashed var(--border);
-      border-radius: var(--radius-sm);
-      padding: 20px;
-      text-align: center;
       cursor: pointer;
-      transition: all var(--transition);
-      font-size: 13px;
-      color: var(--text-muted);
+      margin-top: 8px;
     }
-    .photo-drop:hover { border-color: var(--accent); color: var(--text); }
-    .photo-drop-count { font-size: 12px; margin-top: 4px; color: var(--accent); display: none; }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      cursor: pointer;
+      border: 2px solid var(--bg);
+      transition: transform 0.15s;
+    }
+
+    input[type=range]::-webkit-slider-thumb:active {
+      transform: scale(1.2);
+    }
+
+    #servo-slider::-webkit-slider-thumb {
+      background: var(--accent2);
+      box-shadow: 0 0 8px var(--accent2);
+    }
+
+    .slider-range {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    .card.span2 { grid-column: span 2; }
+
+    @media (max-width: 600px) {
+      .card.span2 { grid-column: span 1; }
+      header h1 { font-size: 1.2rem; }
+    }
   </style>
 </head>
 <body>
-<div class="app">
 
-  <!-- Header -->
-  <header>
-    <div class="logo">
-      <div class="logo-icon">👓</div>
-      GlassTint
-    </div>
-    <div class="header-right">
-      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
-      <div class="tts-indicator" id="tts-indicator">
-        <div class="tts-wave">
-          <span></span><span></span><span></span><span></span>
-        </div>
-        Speaking…
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)">
-        <div class="status-dot" id="status-dot"></div>
-        <span id="status-label">Connecting…</span>
-      </div>
-      <button class="btn-icon" onclick="openAdmin()" title="Admin">
-        🔐 Admin
-      </button>
-    </div>
-  </header>
+<header>
+  <h1>ESP32 FIREBASE DASHBOARD</h1>
+  <p><span id="status-dot"></span><span id="status-text">CONNECTING...</span></p>
+</header>
 
-  <!-- Main -->
-  <main>
+<div class="grid">
 
-    <!-- Tabs -->
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('verify', this)">
-        <span>🔍</span> Verify
-      </button>
-      <button class="tab-btn" onclick="switchTab('history', this)">
-        <span>📋</span> History
-      </button>
-    </div>
-
-    <!-- ═══════════════ VERIFY TAB ═══════════════ -->
-    <div class="tab-content active" id="tab-verify">
-      <div class="verify-layout">
-
-        <!-- Left: upload -->
-        <div>
-          <div class="section-label">Input Image</div>
-          <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-            <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])">
-            <div class="drop-icon">📷</div>
-            <div class="drop-label">Drop image here<br>or click to browse</div>
-            <div class="drop-sublabel">Simulates ESP32-CAM capture</div>
-            <div class="drop-overlay">🔄 Change photo</div>
-          </div>
-
-          <div style="margin-top:12px;display:flex;gap:8px;">
-            <button class="btn btn-primary btn-full" id="verify-btn" onclick="runVerification()" disabled>
-              <div class="spinner"></div>
-              <span class="btn-text">Run Verification</span>
-            </button>
-            <button class="btn btn-secondary" onclick="clearImage()" title="Clear">✕</button>
-          </div>
-        </div>
-
-        <!-- Right: result + enrolled -->
-        <div class="result-panel">
-          <div class="section-label">Result</div>
-
-          <div class="result-card" id="result-card">
-            <div style="font-size:36px;opacity:0.2">👤</div>
-            <div style="color:var(--text-muted);font-size:14px">
-              Upload an image and run verification
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="section-label">Enrolled People</div>
-          <div class="enrolled-list" id="enrolled-list">
-            <div style="font-size:13px;color:var(--text-muted)">Loading…</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════ HISTORY TAB ═══════════════ -->
-    <div class="tab-content" id="tab-history">
-      <div class="history-header">
-        <div class="history-title">Recognition History</div>
-        <button class="btn btn-secondary" onclick="loadHistory()" style="font-size:13px;padding:8px 16px">
-          ↻ Refresh
-        </button>
-      </div>
-
-      <div class="card" id="history-card">
-        <div class="empty-state">
-          <div class="empty-state-icon">📋</div>
-          <div>Loading history…</div>
-        </div>
-      </div>
-
-      <div class="pagination" id="pagination" style="display:none">
-        <button class="btn btn-secondary" id="btn-prev" onclick="changePage(-1)" style="padding:7px 14px;font-size:13px">← Prev</button>
-        <div class="page-info" id="page-info">Page 1</div>
-        <button class="btn btn-secondary" id="btn-next" onclick="changePage(1)" style="padding:7px 14px;font-size:13px">Next →</button>
-      </div>
-    </div>
-
-  </main>
-</div>
-
-<!-- ═══════════════ ADMIN MODAL ═══════════════ -->
-<div class="modal-backdrop" id="admin-modal">
-  <div class="modal">
-    <button class="modal-close" onclick="closeAdmin()">×</button>
-
-    <!-- First-time setup screen -->
-    <div id="admin-setup-screen" style="display:none">
-      <div class="modal-title">🔐 Create Admin Account</div>
-      <div class="modal-sub">First time setup — choose your username and password. This can only be done once.</div>
-      <div class="alert alert-error" id="setup-error"></div>
-      <div class="form-group">
-        <label class="form-label">Username</label>
-        <input type="text" class="form-input" id="setup-username" placeholder="e.g. admin" autocomplete="username">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Password <span style="color:var(--text-muted);font-weight:400">(min 8 characters)</span></label>
-        <input type="password" class="form-input" id="setup-password" placeholder="Choose a strong password" autocomplete="new-password"
-          onkeydown="if(event.key==='Enter') submitSetup()">
-      </div>
-      <button class="btn btn-primary btn-full" onclick="submitSetup()">Create Account</button>
-    </div>
-
-    <!-- Login screen -->
-    <div id="admin-login-screen">
-      <div class="modal-title">🔐 Admin Login</div>
-      <div class="modal-sub">Sign in to manage enrolled people.</div>
-      <div class="alert alert-error" id="login-error">Incorrect credentials. Try again.</div>
-      <div class="form-group">
-        <label class="form-label">Username</label>
-        <input type="text" class="form-input" id="login-username" placeholder="Username" autocomplete="username">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Password</label>
-        <input type="password" class="form-input" id="login-password" placeholder="Password" autocomplete="current-password"
-          onkeydown="if(event.key==='Enter') submitLogin()">
-      </div>
-      <button class="btn btn-primary btn-full" onclick="submitLogin()">Sign In</button>
-    </div>
-
-    <!-- Admin panel (shown after login) -->
-    <div class="admin-panel" id="admin-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div class="modal-title">Manage Enrolled People</div>
-        <button class="btn-icon" onclick="adminLogout()" style="font-size:12px">Sign out</button>
-      </div>
-      <div class="modal-sub">Add or remove trusted individuals.</div>
-
-      <div class="alert alert-error" id="enroll-error"></div>
-      <div class="alert alert-success" id="enroll-success"></div>
-
-      <div class="form-group">
-        <label class="form-label">Full Name</label>
-        <input type="text" class="form-input" id="enroll-name" placeholder="e.g. Nedas Jaronis">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Description</label>
-        <input type="text" class="form-input" id="enroll-desc" placeholder="e.g. Family, Caregiver, Colleague…">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Reference Photos</label>
-        <div class="photo-drop" id="photo-drop" onclick="document.getElementById('enroll-photos').click()">
-          📂 Click to select 3–5 reference photos
-          <div class="photo-drop-count" id="photo-count"></div>
-        </div>
-        <input type="file" id="enroll-photos" accept="image/*" multiple style="display:none" onchange="handleEnrollPhotos(this.files)">
-      </div>
-      <button class="btn btn-primary btn-full" onclick="submitEnrollment()">
-        Add Trusted Person
-      </button>
-
-      <div class="divider"></div>
-      <div class="section-label" style="margin-bottom:8px">Currently Enrolled</div>
-      <div id="admin-enrolled-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
-
-      <div class="divider"></div>
-      <div class="section-label" style="margin-bottom:8px">Change Password</div>
-      <div class="alert alert-error" id="chpw-error"></div>
-      <div class="alert alert-success" id="chpw-success"></div>
-      <div class="form-group">
-        <label class="form-label">Current Password</label>
-        <input type="password" class="form-input" id="chpw-current" placeholder="Current password" autocomplete="current-password">
-      </div>
-      <div class="form-group">
-        <label class="form-label">New Password <span style="color:var(--text-muted);font-weight:400">(min 8 characters)</span></label>
-        <input type="password" class="form-input" id="chpw-new" placeholder="New password" autocomplete="new-password">
-      </div>
-      <button class="btn btn-secondary btn-full" onclick="submitChangePassword()">Update Password</button>
+  <!-- LDR Gauge -->
+  <div class="card">
+    <div class="card-label">LDR Sensor</div>
+    <div class="gauge-value" id="ldr-val">0</div>
+    <div class="gauge-sub">Raw ADC value (0 – 4095)</div>
+    <div class="gauge-track" style="margin-top:14px;">
+      <div class="gauge-fill" id="ldr-bar"></div>
     </div>
   </div>
+
+  <!-- LED Digital Toggle -->
+  <div class="card">
+    <div class="card-label">LED Digital Control</div>
+    <div class="toggle-row">
+      <span class="toggle-label">LED Power</span>
+      <label class="toggle">
+        <input type="checkbox" id="led-toggle" onchange="setLEDDigital(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="btn-status">
+      Physical button: <span id="btn-state">FALSE</span>
+    </div>
+  </div>
+
+  <!-- LED Brightness Slider -->
+  <div class="card">
+    <div class="card-label">LED Brightness (Analog)</div>
+    <div class="slider-value"><span id="analog-val">0</span> <small style="font-size:0.85rem;color:var(--text-dim)">/ 255</small></div>
+    <input type="range" id="analog-slider" min="0" max="255" value="0"
+      oninput="document.getElementById('analog-val').textContent=this.value"
+      onchange="setLEDAnalog(this.value)">
+    <div class="slider-range"><span>0</span><span>255</span></div>
+  </div>
+
+  <!-- Servo Slider -->
+  <div class="card">
+    <div class="card-label">Servo Angle</div>
+    <div class="slider-value"><span id="servo-val">0</span> <small style="font-size:0.6rem;color:var(--text-dim)">°</small></div>
+    <input type="range" id="servo-slider" min="0" max="180" value="0"
+      oninput="document.getElementById('servo-val').textContent=this.value"
+      onchange="setServoAngle(this.value)">
+    <div class="slider-range"><span>0°</span><span>180°</span></div>
+  </div>
+
 </div>
 
-<!-- Toast -->
-<div id="toast"></div>
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue, onChildChanged }
+    from "https://www.gstatic.com/firebasejs/11.0.0/firebase-database.js";
 
-<script>
-  const API = window.location.origin;  // same-origin — FastAPI serves this file
-  let selectedFile = null;
-  let enrollPhotos = [];
-  let historyPage = 0;
-  const PAGE_SIZE = 25;
-  let historyHasMore = false;
-  let speechSynth = window.speechSynthesis;
+  // firebase config
+  const firebaseConfig = {
+    apiKey:      "AIzaSyDkb9PWu8qBo7Zciske9l-49wIuv8uC4hY",
+    authDomain:  "esp32-realtime-database-bc68f.firebaseapp.com",
+    databaseURL: "https://esp32-realtime-database-bc68f-default-rtdb.firebaseio.com",
+    projectId:   "esp32-realtime-database-bc68f",
+    storageBucket: "esp32-realtime-database-bc68f.appspot.com",
+    messagingSenderId: "1093088737297",
+    appId: "1:1093088737297:web:316e1a587e2bcc9e8d19b0"
+  };
+  // ─────────────────────────────────────────────────────────────────
 
-  // Auth token — persisted in sessionStorage so it survives page refresh
-  // but cleared when the browser tab is closed.
-  let adminToken = sessionStorage.getItem('adminToken') || null;
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
 
-  // ── Server health check ──────────────────────────────────
-  async function checkHealth() {
-    try {
-      const r = await fetch(`${API}/health`);
-      if (r.ok) {
-        document.getElementById('status-dot').classList.add('online');
-        document.getElementById('status-label').textContent = 'Server online';
-      }
-    } catch {
-      document.getElementById('status-label').textContent = 'Server offline';
-    }
-  }
+  // status indicator
+  const dot  = document.getElementById('status-dot');
+  const stxt = document.getElementById('status-text');
+  dot.classList.add('connected');
+  stxt.textContent = 'CONNECTED';
 
-  // ── Tab switching ────────────────────────────────────────
-  function switchTab(name, btn) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    btn.classList.add('active');
-    if (name === 'history') loadHistory();
-  }
-
-  // ── Drag & Drop ──────────────────────────────────────────
-  const dropZone = document.getElementById('drop-zone');
-
-  dropZone.addEventListener('dragover', e => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
-  });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    const f = e.dataTransfer.files[0];
-    if (f && f.type.startsWith('image/')) handleFile(f);
+  // LDR - listen and update gauge
+  onValue(ref(db, 'Sensor/ldr_data'), snap => {
+    const val = snap.val() ?? 0;
+    document.getElementById('ldr-val').textContent = val;
+    const pct = Math.min((val / 4095) * 100, 100).toFixed(1);
+    document.getElementById('ldr-bar').style.width = pct + '%';
   });
 
-  function handleFile(file) {
-    if (!file) return;
-    selectedFile = file;
-    const url = URL.createObjectURL(file);
-
-    // Remove old preview
-    const old = dropZone.querySelector('img');
-    if (old) old.remove();
-
-    const img = document.createElement('img');
-    img.src = url;
-    dropZone.insertBefore(img, dropZone.firstChild);
-    dropZone.classList.add('has-image');
-
-    document.getElementById('verify-btn').disabled = false;
-    resetResult();
-  }
-
-  function clearImage() {
-    selectedFile = null;
-    const img = dropZone.querySelector('img');
-    if (img) img.remove();
-    dropZone.classList.remove('has-image');
-    document.getElementById('file-input').value = '';
-    document.getElementById('verify-btn').disabled = true;
-    resetResult();
-  }
-
-  function resetResult() {
-    const card = document.getElementById('result-card');
-    card.className = 'result-card';
-    card.innerHTML = `
-      <div style="font-size:36px;opacity:0.2">👤</div>
-      <div style="color:var(--text-muted);font-size:14px">Upload an image and run verification</div>
-    `;
-  }
-
-  // ── Verification ─────────────────────────────────────────
-  async function runVerification() {
-    if (!selectedFile) return;
-
-    const btn = document.getElementById('verify-btn');
-    btn.classList.add('loading');
-    btn.disabled = true;
-
-    const card = document.getElementById('result-card');
-    card.className = 'result-card';
-    card.innerHTML = `
-      <div style="font-size:28px;animation:spin 1s linear infinite">⟳</div>
-      <div style="color:var(--text-muted);font-size:14px">Running ArcFace model…</div>
-    `;
-
-    try {
-      const form = new FormData();
-      form.append('image', selectedFile);
-
-      const res = await fetch(`${API}/verify`, {
-        method: 'POST',
-        headers: { 'X-Device-Id': 'web-ui' },
-        body: form,
-      });
-
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const data = await res.json();
-      showResult(data);
-      speak(data);
-
-    } catch (err) {
-      card.innerHTML = `
-        <div style="font-size:28px">⚠️</div>
-        <div style="color:var(--red);font-size:14px">${err.message}</div>
-        <div style="font-size:12px;color:var(--text-muted)">Make sure the gateway server is running.</div>
-      `;
-      showToast('Verification failed: ' + err.message);
-    } finally {
-      btn.classList.remove('loading');
-      btn.disabled = false;
-    }
-  }
-
-  function showResult(data) {
-    const trusted = data.trusted;
-    const card = document.getElementById('result-card');
-    const confPct = Math.round(data.confidence * 100);
-
-    card.className = 'result-card ' + (trusted ? 'trusted' : 'unknown');
-    card.innerHTML = `
-      <div class="result-badge ${trusted ? 'trusted' : 'unknown'}">
-        ${trusted ? '✓ Trusted' : '✕ Unknown'}
-      </div>
-      <div class="result-name">${trusted ? escHtml(data.result) : 'Unknown Person'}</div>
-      ${trusted ? '<div class="result-description" id="result-desc-text"></div>' : ''}
-      <div class="confidence-wrap">
-        <div class="confidence-label">
-          <span>Confidence</span>
-          <span>${confPct}%</span>
-        </div>
-        <div class="confidence-bar">
-          <div class="confidence-fill" id="conf-fill" style="width:0%"></div>
-        </div>
-      </div>
-      <div class="result-meta">
-        <span>⏱ ${data.latency_ms}ms</span>
-        <span>🤖 ArcFace</span>
-      </div>
-    `;
-
-    // Animate bar
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const fill = document.getElementById('conf-fill');
-        if (fill) fill.style.width = confPct + '%';
-      });
-    });
-
-    // Populate description from verify response
-    if (trusted && data.description) {
-      const el = document.getElementById('result-desc-text');
-      if (el) el.textContent = data.description;
-    }
-  }
-
-  // ── Text-to-Speech ────────────────────────────────────────
-  function speak(data) {
-    if (!speechSynth) return;
-    speechSynth.cancel();
-
-    const text = data.trusted
-      ? `Trusted. ${data.result}.${data.description ? ' ' + data.description + '.' : ''}`
-      : 'Unknown person detected.';
-
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 0.95;
-    utt.pitch = 1;
-    utt.volume = 1;
-
-    const indicator = document.getElementById('tts-indicator');
-    utt.onstart = () => indicator.classList.add('speaking');
-    utt.onend = () => indicator.classList.remove('speaking');
-    utt.onerror = () => indicator.classList.remove('speaking');
-
-    speechSynth.speak(utt);
-  }
-
-  // ── Enrolled list ─────────────────────────────────────────
-  async function loadEnrolled() {
-    try {
-      const r = await fetch(`${API}/enrolled`);
-      const data = await r.json();
-      renderEnrolled(data.people, 'enrolled-list');
-      renderEnrolled(data.people, 'admin-enrolled-list');
-    } catch {
-      document.getElementById('enrolled-list').innerHTML =
-        '<span style="font-size:13px;color:var(--text-muted)">Could not load</span>';
-    }
-  }
-
-  function renderEnrolled(people, containerId) {
-    const el = document.getElementById(containerId);
-    if (!people || people.length === 0) {
-      el.innerHTML = '<span style="color:var(--text-muted)">No enrolled people found.</span>';
-      return;
-    }
-    if (containerId === 'enrolled-list') {
-      el.innerHTML = people.map(p => `
-        <div class="enrolled-chip" data-name="${escHtml(p.name)}" data-desc="${escHtml(p.description || '')}">
-          <div class="avatar">${p.name.charAt(0).toUpperCase()}</div>
-          ${escHtml(p.name)}
-        </div>
-      `).join('');
-    } else {
-      el.innerHTML = people.map(p => `
-        <div style="border-bottom:1px solid var(--border);padding:8px 0">
-          <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="togglePhotos('${escHtml(p.name)}', this)">
-            <div class="avatar">${p.name.charAt(0).toUpperCase()}</div>
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:600">${escHtml(p.name)}</div>
-              <div style="font-size:12px;color:var(--text-muted)">${escHtml(p.description || 'No description')} · ${p.photo_count} photo${p.photo_count !== 1 ? 's' : ''} · click to view</div>
-            </div>
-            <button class="btn-icon" style="font-size:12px;color:var(--red);border-color:var(--red-dim)"
-              onclick="event.stopPropagation();deleteEnrolled('${escHtml(p.name)}')">Remove</button>
-          </div>
-          <div class="photo-grid" id="photos-${escHtml(p.name)}" style="display:none;margin-top:8px;gap:8px;flex-wrap:wrap"></div>
-        </div>
-      `).join('');
-    }
-  }
-
-  async function togglePhotos(name, el) {
-    const grid = document.getElementById('photos-' + name);
-    if (grid.style.display === 'flex') {
-      grid.style.display = 'none';
-      return;
-    }
-    grid.style.display = 'flex';
-    grid.innerHTML = '<span style="color:var(--text-muted);font-size:12px">Loading photos...</span>';
-
-    try {
-      const r = await fetch(`${API}/enrolled/${encodeURIComponent(name)}/photos`);
-      const data = await r.json();
-      if (!data.photos || data.photos.length === 0) {
-        grid.innerHTML = '<span style="color:var(--text-muted);font-size:12px">No photos found.</span>';
-        return;
-      }
-      grid.innerHTML = '';
-      data.photos.forEach(p => {
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'position:relative;width:100px;height:100px;border-radius:8px;overflow:hidden;border:1px solid var(--border)';
-        const img = document.createElement('img');
-        img.src = p.url;
-        img.style.cssText = 'width:100%;height:100%;object-fit:cover';
-        const btn = document.createElement('button');
-        btn.textContent = 'X';
-        btn.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.7);border:none;color:#ef4444;cursor:pointer;border-radius:4px;padding:2px 6px;font-size:14px';
-        btn.addEventListener('click', () => deletePhoto(name, p.id));
-        wrap.appendChild(img);
-        wrap.appendChild(btn);
-        grid.appendChild(wrap);
-      });
-    } catch(e) {
-      grid.innerHTML = '<span style="color:var(--red);font-size:12px">Failed to load photos.</span>';
-    }
-  }
-
-  async function deletePhoto(name, photoId) {
-    if (!confirm('Delete this photo?')) return;
-    try {
-      await fetch(`${API}/enrolled/${encodeURIComponent(name)}/photos/${photoId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': 'Bearer ' + adminToken },
-      });
-      togglePhotos(name); // collapse
-      togglePhotos(name); // re-expand to refresh
-      loadEnrolled(); // refresh counts
-    } catch(e) {
-      alert('Failed to delete photo');
-    }
-  }
-
-  // ── History ───────────────────────────────────────────────
-  async function loadHistory() {
-    const card = document.getElementById('history-card');
-    card.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⏳</div><div>Loading…</div></div>`;
-
-    try {
-      const r = await fetch(`${API}/events?limit=${PAGE_SIZE + 1}&offset=${historyPage * PAGE_SIZE}`);
-      const data = await r.json();
-
-      if (data.error) throw new Error(data.error);
-
-      const events = data.events || [];
-      historyHasMore = events.length > PAGE_SIZE;
-      const pageEvents = events.slice(0, PAGE_SIZE);
-
-      if (pageEvents.length === 0 && historyPage === 0) {
-        card.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📋</div><div>No recognition events yet.</div></div>`;
-        document.getElementById('pagination').style.display = 'none';
-        return;
-      }
-
-      card.innerHTML = `
-        <table class="events-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Decision</th>
-              <th>Confidence</th>
-              <th>Latency</th>
-              <th>Device</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${pageEvents.map(e => {
-              const trusted = e.decision !== 'unknown';
-              const conf = e.confidence || 0;
-              const confPct = Math.round(conf * 100);
-              const ts = e.timestamp ? new Date(e.timestamp).toLocaleString() : '—';
-              return `
-                <tr class="${trusted ? '' : 'unknown'}">
-                  <td style="color:var(--text-muted)">${ts}</td>
-                  <td>
-                    <span class="pill ${trusted ? 'trusted' : 'unknown'}">
-                      ${trusted ? '✓' : '✕'} ${escHtml(e.decision)}
-                    </span>
-                  </td>
-                  <td>
-                    <div class="conf-mini">
-                      <div class="conf-mini-bar">
-                        <div class="conf-mini-fill" style="width:${confPct}%"></div>
-                      </div>
-                      <span style="font-size:12px;color:var(--text-muted)">${confPct}%</span>
-                    </div>
-                  </td>
-                  <td style="color:var(--text-muted)">${e.latency_ms ? e.latency_ms + 'ms' : '—'}</td>
-                  <td style="color:var(--text-muted)">${escHtml(e.device_id || '—')}</td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
-      `;
-
-      const pag = document.getElementById('pagination');
-      pag.style.display = 'flex';
-      document.getElementById('page-info').textContent = `Page ${historyPage + 1}`;
-      document.getElementById('btn-prev').disabled = historyPage === 0;
-      document.getElementById('btn-next').disabled = !historyHasMore;
-
-    } catch (err) {
-      card.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">⚠️</div>
-          <div style="color:var(--red)">${err.message}</div>
-        </div>
-      `;
-    }
-  }
-
-  function changePage(dir) {
-    historyPage = Math.max(0, historyPage + dir);
-    loadHistory();
-  }
-
-  // ── Admin Modal ───────────────────────────────────────────
-  async function openAdmin() {
-    document.getElementById('admin-modal').classList.add('open');
-    document.getElementById('login-error').classList.remove('show');
-
-    // If we already have a valid session token, skip straight to panel
-    if (adminToken) {
-      showAdminPanel();
-      return;
-    }
-
-    // Check whether first-time setup is needed
-    try {
-      const r = await fetch(`${API}/admin/status`);
-      const data = await r.json();
-      if (data.setup_required) {
-        document.getElementById('admin-setup-screen').style.display = 'block';
-        document.getElementById('admin-login-screen').style.display = 'none';
-      } else {
-        document.getElementById('admin-setup-screen').style.display = 'none';
-        document.getElementById('admin-login-screen').style.display = 'block';
-      }
-    } catch {
-      document.getElementById('admin-login-screen').style.display = 'block';
-    }
-  }
-
-  function closeAdmin() {
-    document.getElementById('admin-modal').classList.remove('open');
-  }
-
-  document.getElementById('admin-modal').addEventListener('click', function(e) {
-    if (e.target === this) closeAdmin();
+  // button state - isten for physical button press
+  onValue(ref(db, 'Sensor/switch'), snap => {
+    const val = snap.val();
+    document.getElementById('btn-state').textContent = val ? 'TRUE' : 'FALSE';
+    document.getElementById('btn-state').style.color = val ? 'var(--warn)' : 'var(--accent2)';
   });
 
-  async function submitSetup() {
-    const u = document.getElementById('setup-username').value.trim();
-    const p = document.getElementById('setup-password').value;
-    const errEl = document.getElementById('setup-error');
-    errEl.classList.remove('show');
+  // LED digital - listen so UI stays in sync
+  onValue(ref(db, 'LED/digital'), snap => {
+    document.getElementById('led-toggle').checked = snap.val() ?? false;
+  });
 
-    if (!u || !p) { errEl.textContent = 'Username and password are required.'; errEl.classList.add('show'); return; }
-    if (p.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.classList.add('show'); return; }
+  // LED analog - listen so slider stays in sync
+  onValue(ref(db, 'LED/analog'), snap => {
+    const val = snap.val() ?? 0;
+    document.getElementById('analog-slider').value = val;
+    document.getElementById('analog-val').textContent = val;
+  });
 
-    try {
-      const r = await fetch(`${API}/admin/setup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: u, password: p }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'Setup failed');
-      adminToken = data.token;
-      sessionStorage.setItem('adminToken', adminToken);
-      showAdminPanel();
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.classList.add('show');
-    }
-  }
+  // servo - listen so slider stays in sync
+  onValue(ref(db, 'Servo/angle'), snap => {
+    const val = snap.val() ?? 0;
+    document.getElementById('servo-slider').value = val;
+    document.getElementById('servo-val').textContent = val;
+  });
 
-  async function submitLogin() {
-    const u = document.getElementById('login-username').value.trim();
-    const p = document.getElementById('login-password').value;
-    const errEl = document.getElementById('login-error');
-    errEl.classList.remove('show');
-
-    try {
-      const r = await fetch(`${API}/admin/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: u, password: p }),
-      });
-      const data = await r.json();
-      if (r.ok) {
-        adminToken = data.token;
-        sessionStorage.setItem('adminToken', adminToken);
-        showAdminPanel();
-      } else {
-        errEl.classList.add('show');
-      }
-    } catch {
-      errEl.classList.add('show');
-    }
-  }
-
-  function showAdminPanel() {
-    document.getElementById('admin-setup-screen').style.display = 'none';
-    document.getElementById('admin-login-screen').style.display = 'none';
-    document.getElementById('admin-panel').classList.add('unlocked');
-    loadEnrolled();
-  }
-
-  async function adminLogout() {
-    if (adminToken) {
-      try {
-        await fetch(`${API}/admin/logout`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${adminToken}` },
-        });
-      } catch { /* best effort */ }
-    }
-    adminToken = null;
-    sessionStorage.removeItem('adminToken');
-    document.getElementById('admin-panel').classList.remove('unlocked');
-    document.getElementById('admin-login-screen').style.display = 'block';
-    document.getElementById('login-username').value = '';
-    document.getElementById('login-password').value = '';
-  }
-
-  async function submitChangePassword() {
-    const current = document.getElementById('chpw-current').value;
-    const newPw = document.getElementById('chpw-new').value;
-    const errEl = document.getElementById('chpw-error');
-    const okEl = document.getElementById('chpw-success');
-    errEl.classList.remove('show');
-    okEl.classList.remove('show');
-
-    if (newPw.length < 8) {
-      errEl.textContent = 'New password must be at least 8 characters.';
-      errEl.classList.add('show');
-      return;
-    }
-    try {
-      const r = await fetch(`${API}/admin/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${adminToken}`,
-        },
-        body: JSON.stringify({ current_password: current, new_password: newPw }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'Password change failed');
-      okEl.textContent = 'Password updated successfully.';
-      okEl.classList.add('show');
-      document.getElementById('chpw-current').value = '';
-      document.getElementById('chpw-new').value = '';
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.classList.add('show');
-    }
-  }
-
-  function handleEnrollPhotos(files) {
-    enrollPhotos = Array.from(files);
-    const countEl = document.getElementById('photo-count');
-    countEl.style.display = 'block';
-    countEl.textContent = `${enrollPhotos.length} photo${enrollPhotos.length !== 1 ? 's' : ''} selected`;
-  }
-
-  async function submitEnrollment() {
-    const name = document.getElementById('enroll-name').value.trim();
-    const desc = document.getElementById('enroll-desc').value.trim();
-    const errEl = document.getElementById('enroll-error');
-    const okEl = document.getElementById('enroll-success');
-
-    errEl.classList.remove('show');
-    okEl.classList.remove('show');
-
-    if (!name) { errEl.textContent = 'Name is required.'; errEl.classList.add('show'); return; }
-    if (enrollPhotos.length < 1) { errEl.textContent = 'Please select at least 1 reference photo.'; errEl.classList.add('show'); return; }
-
-    try {
-      const form = new FormData();
-      form.append('name', name);
-      form.append('description', desc);
-      enrollPhotos.forEach(f => form.append('photos', f));
-
-      const r = await fetch(`${API}/enrolled`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${adminToken}` },
-        body: form,
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'Enrollment failed');
-
-      okEl.textContent = `${name} enrolled successfully with ${enrollPhotos.length} photos.`;
-      okEl.classList.add('show');
-      document.getElementById('enroll-name').value = '';
-      document.getElementById('enroll-desc').value = '';
-      enrollPhotos = [];
-      document.getElementById('photo-count').style.display = 'none';
-      loadEnrolled();
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.classList.add('show');
-    }
-  }
-
-  // ── Delete enrolled person ────────────────────────────────
-  async function deleteEnrolled(name) {
-    if (!confirm(`Remove ${name} from the trusted list? This cannot be undone.`)) return;
-    try {
-      const r = await fetch(`${API}/enrolled/${encodeURIComponent(name)}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${adminToken}` },
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || 'Delete failed');
-      showToast(`${name} removed.`);
-      loadEnrolled();
-    } catch (err) {
-      showToast('Error: ' + err.message);
-    }
-  }
-
-  // ── Toast ─────────────────────────────────────────────────
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 3500);
-  }
-
-  // ── Utils ─────────────────────────────────────────────────
-  function escHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  // ── Theme Toggle ─────────────────────────────────────────────
-  function toggleTheme() {
-    const root = document.documentElement;
-    const btn = document.getElementById('theme-toggle');
-    const isLight = root.classList.toggle('light');
-
-    btn.textContent = isLight ? '☀️' : '🌙';
-    localStorage.setItem('glasstint-theme', isLight ? 'light' : 'dark');
-  }
-
-  // apply saved theme whenever page loads
-  (function() {
-    const saved = localStorage.getItem('glasstint-theme');
-
-    if (saved == 'light') {
-      document.documentElement.classList.add('light');
-
-      const btn = document.getElementById('theme-toggle');
-
-      if (btn) btn.textContent = '☀️';
-    }
-  })();
-
-  
-
-  // ── Init ──────────────────────────────────────────────────
-  checkHealth();
-  loadEnrolled();
-  setInterval(checkHealth, 30000);
+  // write functions exposed to global scope
+  window.setLEDDigital = (val) => set(ref(db, 'LED/digital'), val);
+  window.setLEDAnalog  = (val) => set(ref(db, 'LED/analog'),  parseInt(val));
+  window.setServoAngle = (val) => set(ref(db, 'Servo/angle'), parseInt(val));
 </script>
+
 </body>
 </html>
