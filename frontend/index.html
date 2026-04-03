@@ -1061,16 +1061,70 @@
       `).join('');
     } else {
       el.innerHTML = people.map(p => `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-          <div class="avatar">${p.name.charAt(0).toUpperCase()}</div>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:600">${escHtml(p.name)}</div>
-            <div style="font-size:12px;color:var(--text-muted)">${escHtml(p.description || 'No description')} · ${p.photo_count} photo${p.photo_count !== 1 ? 's' : ''}</div>
+        <div style="border-bottom:1px solid var(--border);padding:8px 0">
+          <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="togglePhotos('${escHtml(p.name)}', this)">
+            <div class="avatar">${p.name.charAt(0).toUpperCase()}</div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">${escHtml(p.name)}</div>
+              <div style="font-size:12px;color:var(--text-muted)">${escHtml(p.description || 'No description')} · ${p.photo_count} photo${p.photo_count !== 1 ? 's' : ''} · click to view</div>
+            </div>
+            <button class="btn-icon" style="font-size:12px;color:var(--red);border-color:var(--red-dim)"
+              onclick="event.stopPropagation();deleteEnrolled('${escHtml(p.name)}')">Remove</button>
           </div>
-          <button class="btn-icon" style="font-size:12px;color:var(--red);border-color:var(--red-dim)"
-            onclick="deleteEnrolled('${escHtml(p.name)}')">Remove</button>
+          <div class="photo-grid" id="photos-${escHtml(p.name)}" style="display:none;margin-top:8px;gap:8px;flex-wrap:wrap"></div>
         </div>
       `).join('');
+    }
+  }
+
+  async function togglePhotos(name, el) {
+    const grid = document.getElementById('photos-' + name);
+    if (grid.style.display === 'flex') {
+      grid.style.display = 'none';
+      return;
+    }
+    grid.style.display = 'flex';
+    grid.innerHTML = '<span style="color:var(--text-muted);font-size:12px">Loading photos...</span>';
+
+    try {
+      const r = await fetch(`${API}/enrolled/${encodeURIComponent(name)}/photos`);
+      const data = await r.json();
+      if (!data.photos || data.photos.length === 0) {
+        grid.innerHTML = '<span style="color:var(--text-muted);font-size:12px">No photos found.</span>';
+        return;
+      }
+      grid.innerHTML = '';
+      data.photos.forEach(p => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative;width:100px;height:100px;border-radius:8px;overflow:hidden;border:1px solid var(--border)';
+        const img = document.createElement('img');
+        img.src = p.url;
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+        const btn = document.createElement('button');
+        btn.textContent = 'X';
+        btn.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.7);border:none;color:#ef4444;cursor:pointer;border-radius:4px;padding:2px 6px;font-size:14px';
+        btn.addEventListener('click', () => deletePhoto(name, p.id));
+        wrap.appendChild(img);
+        wrap.appendChild(btn);
+        grid.appendChild(wrap);
+      });
+    } catch(e) {
+      grid.innerHTML = '<span style="color:var(--red);font-size:12px">Failed to load photos.</span>';
+    }
+  }
+
+  async function deletePhoto(name, photoId) {
+    if (!confirm('Delete this photo?')) return;
+    try {
+      await fetch(`${API}/enrolled/${encodeURIComponent(name)}/photos/${photoId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + adminToken },
+      });
+      togglePhotos(name); // collapse
+      togglePhotos(name); // re-expand to refresh
+      loadEnrolled(); // refresh counts
+    } catch(e) {
+      alert('Failed to delete photo');
     }
   }
 

@@ -450,6 +450,71 @@ async def add_enrolled(
     return {"ok": True, "name": safe_name, "photos_saved": saved}
 
 
+@app.get("/enrolled/{name}/photos")
+async def get_enrolled_photos(name: str):
+    """Get all photos for an enrolled person with viewable URLs."""
+    if not supabase_admin:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    person = (
+        supabase_admin.table("enrolled_people")
+        .select("id")
+        .eq("name", name)
+        .limit(1)
+        .execute()
+    )
+    if not person.data:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    photos = (
+        supabase_admin.table("enrolled_photos")
+        .select("id, storage_path")
+        .eq("person_id", person.data[0]["id"])
+        .execute()
+    )
+
+    photo_list = []
+    for p in photos.data:
+        try:
+            url_res = supabase_admin.storage.from_(STORAGE_BUCKET).create_signed_url(
+                p["storage_path"], 3600
+            )
+            photo_list.append({
+                "id": p["id"],
+                "storage_path": p["storage_path"],
+                "url": url_res["signedURL"],
+            })
+        except Exception as e:
+            print(f"Failed to get signed URL for {p['storage_path']}: {e}")
+
+    return {"name": name, "photos": photo_list}
+
+
+@app.delete("/enrolled/{name}/photos/{photo_id}")
+async def delete_enrolled_photo(name: str, photo_id: str, _token: str = Depends(require_auth)):
+    """Delete a single photo from an enrolled person."""
+    if not supabase_admin:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    photo = (
+        supabase_admin.table("enrolled_photos")
+        .select("storage_path")
+        .eq("id", photo_id)
+        .single()
+        .execute()
+    )
+    if not photo.data:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    try:
+        supabase_admin.storage.from_(STORAGE_BUCKET).remove([photo.data["storage_path"]])
+    except Exception as e:
+        print(f"Failed to delete from storage: {e}")
+
+    supabase_admin.table("enrolled_photos").delete().eq("id", photo_id).execute()
+    return {"ok": True, "deleted_photo_id": photo_id}
+
+
 @app.delete("/enrolled/{name}")
 async def delete_enrolled(name: str, _token: str = Depends(require_auth)):
     """Remove a trusted person and all their reference photos."""
