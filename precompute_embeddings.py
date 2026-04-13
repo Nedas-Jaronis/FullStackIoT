@@ -13,7 +13,7 @@ if enrolled.exists():
             try:
                 reps = DeepFace.represent(str(img), model_name='ArcFace', enforce_detection=True)
                 if reps:
-                    cache.append({'name': p.name, 'embedding': reps[0]['embedding'], 'source': str(img)})
+                    cache.append({'name': p.name, 'embedding': reps[0]['embedding'], 'source': f'{p.name}/{img.name}'})
                     print(f'OK {p.name}/{img.name}')
             except Exception as e:
                 print(f'SKIP {img.name}: {e}')
