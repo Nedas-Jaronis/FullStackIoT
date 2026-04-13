@@ -115,6 +115,11 @@
       z-index: 100;
     }
 
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
     .logo {
       display: flex;
       align-items: center;
@@ -122,6 +127,16 @@
       font-size: 18px;
       font-weight: 700;
       letter-spacing: -0.3px;
+    }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 4px 10px 4px 9px;
+      line-height: 1;
     }
 
     .logo-icon {
@@ -548,19 +563,32 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 28px;
+      padding: 32px 32px 26px;
       width: 100%;
-      max-width: 420px;
+      max-width: 560px;
       position: relative;
       flex-shrink: 0;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.35);
     }
 
     .modal-title {
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 700;
       margin-bottom: 4px;
+      letter-spacing: -0.2px;
     }
     .modal-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 22px; }
+
+    .modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding-right: 36px;
+      margin-bottom: 20px;
+    }
+    .modal-header .modal-title { margin-bottom: 2px; }
+    .modal-header .modal-sub { margin-bottom: 0; }
 
     .form-group { margin-bottom: 16px; }
     .form-label {
@@ -588,13 +616,30 @@
 
     .modal-close {
       position: absolute;
-      top: 16px; right: 16px;
-      background: none; border: none;
+      top: 14px; right: 14px;
+      width: 28px; height: 28px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px;
       color: var(--text-muted); cursor: pointer;
-      font-size: 20px; line-height: 1;
-      transition: color var(--transition);
+      font-size: 16px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      transition: all var(--transition);
     }
-    .modal-close:hover { color: var(--text); }
+    .modal-close:hover { color: var(--text); border-color: var(--accent-dim); }
+
+    .signout-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      transition: all var(--transition);
+    }
+    .signout-btn:hover { color: var(--red); border-color: var(--red); }
 
     .admin-panel { display: none; }
     .admin-panel.unlocked { display: block; }
@@ -678,6 +723,319 @@
     }
     .page-info { font-size: 13px; color: var(--text-muted); }
 
+    /* ── Ambient background glow (dark mode only) ─────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: -1;
+      background:
+        radial-gradient(900px 600px at 15% -5%, rgba(79,142,247,0.18), transparent 60%),
+        radial-gradient(700px 500px at 95% 10%, rgba(124,58,237,0.14), transparent 60%),
+        radial-gradient(600px 500px at 50% 100%, rgba(34,197,94,0.08), transparent 60%);
+    }
+    :root.light body::before {
+      background:
+        radial-gradient(900px 600px at 15% -5%, rgba(79,142,247,0.12), transparent 60%),
+        radial-gradient(700px 500px at 95% 10%, rgba(124,58,237,0.08), transparent 60%);
+    }
+
+    /* ── About tab ─────────────────────────────────────────── */
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 36px;
+      align-items: center;
+      padding: 36px 36px;
+      background: linear-gradient(135deg, rgba(79,142,247,0.10), rgba(124,58,237,0.10));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      margin-bottom: 28px;
+      overflow: hidden;
+      position: relative;
+    }
+    .hero::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(600px 300px at 80% 10%, rgba(79,142,247,0.15), transparent 60%);
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 5px 12px;
+      border-radius: 100px;
+      margin-bottom: 18px;
+    }
+    .hero-title {
+      font-size: 54px;
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1;
+      margin-bottom: 8px;
+      background: linear-gradient(120deg, var(--text) 0%, var(--accent) 120%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.4px;
+      line-height: 1.25;
+      margin-bottom: 16px;
+    }
+    .hero-tagline {
+      font-size: 15px;
+      color: var(--text-muted);
+      line-height: 1.65;
+      margin-bottom: 22px;
+      max-width: 56ch;
+    }
+    .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .hero-image-wrap {
+      border-radius: 16px;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      background: linear-gradient(135deg, rgba(79,142,247,0.15), rgba(124,58,237,0.18));
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .hero-image-wrap img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .hero-image-placeholder {
+      font-size: 80px;
+      filter: drop-shadow(0 4px 16px rgba(79,142,247,0.4));
+    }
+
+    .section {
+      margin: 40px 0;
+    }
+    .section-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .section-heading {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+    }
+    .section-sub {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: transform var(--transition), border-color var(--transition);
+    }
+    .feature:hover { transform: translateY(-2px); border-color: var(--accent-dim); }
+    .feature-icon {
+      width: 36px; height: 36px;
+      border-radius: 9px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      line-height: 1;
+    }
+    .feature-title { font-weight: 600; margin-bottom: 4px; font-size: 15px; }
+    .feature-body { font-size: 13px; color: var(--text-muted); line-height: 1.55; }
+
+    .schematic-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .schematic-caption {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .schematic-caption strong { color: var(--text); font-weight: 600; }
+    .schematic-img-wrap {
+      background: #ffffff;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .schematic-img-wrap img { width: 100%; display: block; }
+    .schematic-missing {
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      background: var(--surface2);
+      border-radius: 10px;
+      border: 1px dashed var(--border);
+    }
+    .schematic-missing code {
+      background: var(--bg);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--accent);
+    }
+
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .team-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 16px;
+      text-align: center;
+      transition: transform var(--transition);
+    }
+    .team-card:hover { transform: translateY(-2px); }
+    .team-avatar {
+      width: 62px; height: 62px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600;
+      font-size: 20px;
+      color: var(--text);
+      margin: 0 auto 14px;
+      letter-spacing: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      position: relative;
+    }
+    .team-avatar::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 50%;
+      padding: 1px;
+      background: linear-gradient(135deg, var(--accent), transparent 70%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+              mask-composite: exclude;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+    .team-avatar-1::after { background: linear-gradient(135deg, #4f8ef7, transparent 70%); }
+    .team-avatar-2::after { background: linear-gradient(135deg, #22c55e, transparent 70%); }
+    .team-avatar-3::after { background: linear-gradient(135deg, #f59e0b, transparent 70%); }
+    .team-avatar-4::after { background: linear-gradient(135deg, #ec4899, transparent 70%); }
+    .team-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+    .team-role { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+    .team-email { font-size: 12px; color: var(--accent); text-decoration: none; word-break: break-all; }
+    .team-email:hover { text-decoration: underline; }
+
+    .stack-grid {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .stack-badge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stack-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* ── Stats tab ─────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .kpi-value {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      line-height: 1.1;
+    }
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .kpi.accent { border-color: var(--accent-dim); }
+    .kpi.green { border-color: rgba(34,197,94,0.25); }
+    .kpi.red { border-color: rgba(239,68,68,0.25); }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 14px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .chart-card h3 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+    .chart-canvas-wrap { position: relative; height: 240px; }
+
+    @media (max-width: 820px) {
+      .hero { grid-template-columns: 1fr; padding: 24px; }
+      .hero-title { font-size: 32px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .team-grid { grid-template-columns: repeat(2, 1fr); }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .chart-grid { grid-template-columns: 1fr; }
+    }
+
     /* file drop zone inside admin */
     .photo-drop {
       border: 2px dashed var(--border);
@@ -698,9 +1056,15 @@
 
   <!-- Header -->
   <header>
-    <div class="logo">
-      <div class="logo-icon">👓</div>
-      GlassTint
+    <div class="logo-wrap">
+      <div class="logo">
+        <div class="logo-icon">👓</div>
+        GlassTint
+      </div>
+      <div class="status-pill" title="Gateway status">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-label">Connecting…</span>
+      </div>
     </div>
     <div class="header-right">
       <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
@@ -710,12 +1074,8 @@
         </div>
         Speaking…
       </div>
-      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)">
-        <div class="status-dot" id="status-dot"></div>
-        <span id="status-label">Connecting…</span>
-      </div>
       <button class="btn-icon" onclick="openAdmin()" title="Admin">
-        🔐 Admin
+        Admin
       </button>
     </div>
   </header>
@@ -730,6 +1090,12 @@
       </button>
       <button class="tab-btn" onclick="switchTab('history', this)">
         <span>📋</span> History
+      </button>
+      <button class="tab-btn" onclick="switchTab('stats', this)">
+        <span>📊</span> Stats
+      </button>
+      <button class="tab-btn" onclick="switchTab('about', this)">
+        <span>✨</span> About
       </button>
     </div>
 
@@ -801,6 +1167,241 @@
       </div>
     </div>
 
+    <!-- ═══════════════ STATS TAB ═══════════════ -->
+    <div class="tab-content" id="tab-stats">
+      <div class="section-head">
+        <div>
+          <div class="section-heading">System Stats</div>
+          <div class="section-sub">Live metrics from recognition events.</div>
+        </div>
+        <button class="btn btn-secondary" onclick="loadStats()" style="font-size:13px;padding:8px 16px">
+          ↻ Refresh
+        </button>
+      </div>
+
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Total Verifications</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">All time</div></div>
+        <div class="kpi green"><div class="kpi-label">Trusted Matches</div><div class="kpi-value" id="kpi-trusted">—</div><div class="kpi-sub" id="kpi-trusted-sub">&nbsp;</div></div>
+        <div class="kpi red"><div class="kpi-label">Unknown</div><div class="kpi-value" id="kpi-unknown">—</div><div class="kpi-sub" id="kpi-unknown-sub">&nbsp;</div></div>
+        <div class="kpi accent"><div class="kpi-label">Avg Confidence</div><div class="kpi-value" id="kpi-conf">—</div><div class="kpi-sub">Trusted only</div></div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Verifications — Last 14 Days</h3>
+          <div class="chart-canvas-wrap"><canvas id="chart-timeline"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Recognition by Person</h3>
+          <div class="chart-canvas-wrap"><canvas id="chart-people"></canvas></div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px" class="chart-card">
+        <h3>Average Latency — Last 14 Days</h3>
+        <div class="chart-canvas-wrap"><canvas id="chart-latency"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ ABOUT TAB ═══════════════ -->
+    <div class="tab-content" id="tab-about">
+
+      <!-- Hero -->
+      <div class="hero">
+        <div style="position:relative;z-index:1">
+          <span class="hero-eyebrow">IoT · Computer Vision · Assistive Wearable</span>
+          <div class="hero-title">GlassTint</div>
+          <div class="hero-subtitle">Glasses that tell you who you can trust.</div>
+          <div class="hero-tagline">An assistive wearable for people with visual or memory impairment. A quiet button press on the frame captures a face, a cloud-hosted ArcFace model verifies it, and the wearer hears who it is — along with the role they play in their life. Designed to protect against strangers, scammers, and the everyday confusion of forgetting a face.</div>
+          <div class="hero-actions">
+            <button class="btn btn-primary" onclick="document.querySelectorAll('.tab-btn')[0].click()">Try a verification</button>
+            <a class="btn btn-secondary" href="https://github.com/Nedas-Jaronis/FullStackIoT" target="_blank" rel="noopener">View on GitHub</a>
+          </div>
+        </div>
+        <div class="hero-image-wrap" id="hero-image-wrap">
+          <img src="assets/hero.jpg" alt="GlassTint prototype" onerror="heroImageFallback(this)">
+        </div>
+      </div>
+
+      <!-- The problem -->
+      <div class="section">
+        <div class="section-head">
+          <div>
+            <div class="section-heading">The problem</div>
+            <div class="section-sub">Why faces at the door are a daily risk for the people we built this for.</div>
+          </div>
+        </div>
+        <div class="feature-grid">
+          <div class="feature">
+            <div class="feature-icon">🦯</div>
+            <div class="feature-title">Visual impairment</div>
+            <div class="feature-body">For people who are blind or have significant vision loss, every face is an unrecognizable blur — or invisible entirely. A family member and a stranger at the door look the same, forcing reliance on a voice that anyone can fake.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">⟳</div>
+            <div class="feature-title">Memory impairment</div>
+            <div class="feature-body">People with dementia or cognitive decline lose the ability to place familiar faces. A caregiver this morning can feel like a complete stranger by afternoon.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">⚠</div>
+            <div class="feature-title">Scams and bad actors</div>
+            <div class="feature-body">Vulnerable people are disproportionately targeted by impersonators, fake caregivers, and scammers exploiting confusion. Confirming identity protects them from giving up information, money, or access they shouldn't.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- How GlassTint helps -->
+      <div class="section">
+        <div class="section-head">
+          <div>
+            <div class="section-heading">How GlassTint helps</div>
+            <div class="section-sub">One press, two seconds, spoken result — plus the context that actually matters.</div>
+          </div>
+        </div>
+        <div class="feature-grid">
+          <div class="feature">
+            <div class="feature-icon">◉</div>
+            <div class="feature-title">Trusted or unknown</div>
+            <div class="feature-body">Press the frame button when someone approaches. The system says "Anthony — brother" or "Unknown face" through the bone-conduction audio, privately.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">✎</div>
+            <div class="feature-title">Roles and context</div>
+            <div class="feature-body">Each enrolled person has a short description — "daughter", "home nurse Monday/Wednesday", "pharmacy delivery". The wearer gets a real cue, not just a name they might not remember either.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">⌂</div>
+            <div class="feature-title">Admin dashboard</div>
+            <div class="feature-body">Family or a caregiver manages the trust list from this very web UI — add a person, upload 3–5 photos, set their role. Removing a former contact is just as fast, which matters when a relationship changes.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- What this version is + future -->
+      <div class="section">
+        <div class="section-head">
+          <div>
+            <div class="section-heading">This version, and where it's headed</div>
+            <div class="section-sub">The demo solves the core problem. Here's what comes next.</div>
+          </div>
+        </div>
+        <div class="feature-grid">
+          <div class="feature">
+            <div class="feature-icon">▶</div>
+            <div class="feature-title">Today: on-demand verify</div>
+            <div class="feature-body">A press-to-capture model. Privacy-first — the camera never streams and nothing leaves the glasses without the wearer's intent. Round trip is under two seconds on Cloud Run.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">∞</div>
+            <div class="feature-title">Next: always-on recognition</div>
+            <div class="feature-body">A future build can run continuous low-rate capture, announcing people as they approach — no button required. Useful indoors where the wearer expects familiar faces and wants to be forewarned.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">◆</div>
+            <div class="feature-title">Beyond: liveness + alerts</div>
+            <div class="feature-body">Liveness detection to block photo-spoof attacks, stranger-at-the-door alerts to a family member's phone, and offline fallback when connectivity drops.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Architecture -->
+      <div class="section">
+        <div class="section-head">
+          <div>
+            <div class="section-heading">How it works under the hood</div>
+            <div class="section-sub">Two microcontrollers talk over ESP-NOW; the vision MCU talks to a Cloud Run gateway over HTTPS.</div>
+          </div>
+        </div>
+
+        <div class="schematic-card">
+          <div class="schematic-caption"><strong>System overview</strong> — button-to-audio round-trip across MCU-B, MCU-A, and the Cloud Run gateway.</div>
+          <div class="schematic-img-wrap">
+            <img src="assets/schematic_system.png" alt="System architecture"
+              data-source="docs/schematics/system.excalidraw" data-target="frontend/assets/schematic_system.png"
+              onerror="schematicFallback(this)">
+          </div>
+        </div>
+
+        <div class="schematic-card">
+          <div class="schematic-caption"><strong>MCU-A · Vision & network</strong> — Freenove ESP32-WROVER with an OV3660 camera. Captures a JPEG on trigger, POSTs it to the gateway over HTTPS, and sends the result back to MCU-B via ESP-NOW.</div>
+          <div class="schematic-img-wrap">
+            <img src="assets/schematic_mcu_a.png" alt="MCU-A schematic"
+              data-source="docs/schematics/mcu_a.excalidraw" data-target="frontend/assets/schematic_mcu_a.png"
+              onerror="schematicFallback(this)">
+          </div>
+        </div>
+
+        <div class="schematic-card">
+          <div class="schematic-caption"><strong>MCU-B · User I/O</strong> — ESP32 Dev board: trigger button, status LED, DAC audio to the speaker amplifier, LiPo battery with voltage monitoring.</div>
+          <div class="schematic-img-wrap">
+            <img src="assets/schematic_mcu_b.png" alt="MCU-B schematic"
+              data-source="docs/schematics/mcu_b.excalidraw" data-target="frontend/assets/schematic_mcu_b.png"
+              onerror="schematicFallback(this)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Stack -->
+      <div class="section">
+        <div class="section-head">
+          <div>
+            <div class="section-heading">Stack</div>
+            <div class="section-sub">Everything running in the live demo.</div>
+          </div>
+        </div>
+        <div class="stack-grid">
+          <span class="stack-badge"><span class="dot"></span>Python 3.11</span>
+          <span class="stack-badge"><span class="dot"></span>FastAPI</span>
+          <span class="stack-badge"><span class="dot"></span>DeepFace · ArcFace</span>
+          <span class="stack-badge"><span class="dot"></span>TensorFlow</span>
+          <span class="stack-badge"><span class="dot"></span>Supabase (Postgres + Storage)</span>
+          <span class="stack-badge"><span class="dot"></span>Google Cloud Run</span>
+          <span class="stack-badge"><span class="dot"></span>Artifact Registry</span>
+          <span class="stack-badge"><span class="dot"></span>ESP32 (Arduino)</span>
+          <span class="stack-badge"><span class="dot"></span>ESP-NOW</span>
+          <span class="stack-badge"><span class="dot"></span>OV3660 Camera</span>
+          <span class="stack-badge"><span class="dot"></span>Web Speech API</span>
+        </div>
+      </div>
+
+      <!-- Team -->
+      <div class="section">
+        <div class="section-head">
+          <div>
+            <div class="section-heading">Team</div>
+            <div class="section-sub">University of Florida · Full-Stack IoT project</div>
+          </div>
+        </div>
+        <div class="team-grid">
+          <div class="team-card">
+            <div class="team-avatar team-avatar-1">NJ</div>
+            <div class="team-name">Nedas Jaronis</div>
+            <div class="team-role">MCU-B · ESP-NOW · Audio</div>
+            <a class="team-email" href="mailto:jaronisnedas@ufl.edu">jaronisnedas@ufl.edu</a>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar team-avatar-2">AM</div>
+            <div class="team-name">Anthony D. Madorsky</div>
+            <div class="team-role">Hardware · Power · Enclosure</div>
+            <a class="team-email" href="mailto:anthonymadorsky@ufl.edu">anthonymadorsky@ufl.edu</a>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar team-avatar-3">NP</div>
+            <div class="team-name">Natania Philippe</div>
+            <div class="team-role">MCU-A · Camera · Frontend</div>
+            <a class="team-email" href="mailto:nphilippe@ufl.edu">nphilippe@ufl.edu</a>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar team-avatar-4">HR</div>
+            <div class="team-name">Hemdutt Rao</div>
+            <div class="team-role">Cloud · Gateway · MCU-A · Frontend</div>
+            <a class="team-email" href="mailto:raohemdutt@ufl.edu">raohemdutt@ufl.edu</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
   </main>
 </div>
 
@@ -811,7 +1412,7 @@
 
     <!-- First-time setup screen -->
     <div id="admin-setup-screen" style="display:none">
-      <div class="modal-title">🔐 Create Admin Account</div>
+      <div class="modal-title">Create admin account</div>
       <div class="modal-sub">First time setup — choose your username and password. This can only be done once.</div>
       <div class="alert alert-error" id="setup-error"></div>
       <div class="form-group">
@@ -828,8 +1429,8 @@
 
     <!-- Login screen -->
     <div id="admin-login-screen">
-      <div class="modal-title">🔐 Admin Login</div>
-      <div class="modal-sub">Sign in to manage enrolled people.</div>
+      <div class="modal-title">Admin sign in</div>
+      <div class="modal-sub">Sign in to manage the trusted-people list.</div>
       <div class="alert alert-error" id="login-error">Incorrect credentials. Try again.</div>
       <div class="form-group">
         <label class="form-label">Username</label>
@@ -845,11 +1446,8 @@
 
     <!-- Admin panel (shown after login) -->
     <div class="admin-panel" id="admin-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div class="modal-title">Manage Enrolled People</div>
-        <button class="btn-icon" onclick="adminLogout()" style="font-size:12px">Sign out</button>
-      </div>
-      <div class="modal-sub">Add or remove trusted individuals.</div>
+      <div class="modal-title">Manage Trusted People</div>
+      <div class="modal-sub">Add or remove people the wearer should recognize.</div>
 
       <div class="alert alert-error" id="enroll-error"></div>
       <div class="alert alert-success" id="enroll-success"></div>
@@ -891,6 +1489,9 @@
         <input type="password" class="form-input" id="chpw-new" placeholder="New password" autocomplete="new-password">
       </div>
       <button class="btn btn-secondary btn-full" onclick="submitChangePassword()">Update Password</button>
+
+      <div class="divider"></div>
+      <button class="signout-btn btn-full" onclick="adminLogout()">Sign out</button>
     </div>
   </div>
 </div>
@@ -931,6 +1532,7 @@
     document.getElementById('tab-' + name).classList.add('active');
     btn.classList.add('active');
     if (name === 'history') loadHistory();
+    if (name === 'stats') loadStats();
   }
 
   // ── Drag & Drop ──────────────────────────────────────────
@@ -1303,6 +1905,161 @@
   function toggleEventDetails(i) {
     const row = document.getElementById(`event-details-${i}`);
     if (row) row.classList.toggle('hidden');
+  }
+
+  function heroImageFallback(img) {
+    const wrap = img.parentElement;
+    const div = document.createElement('div');
+    div.className = 'hero-image-placeholder';
+    div.textContent = '👓';
+    wrap.replaceChildren(div);
+  }
+
+  function schematicFallback(img) {
+    const source = img.dataset.source || '';
+    const target = img.dataset.target || '';
+    const wrap = img.parentElement;
+    const div = document.createElement('div');
+    div.className = 'schematic-missing';
+    div.innerHTML = `Schematic image missing. Export <code>${source}</code> to <code>${target}</code>.`;
+    wrap.replaceChildren(div);
+  }
+
+  // ── Stats ─────────────────────────────────────────────────
+  let chartJsReady = null;
+  let statsCharts = {};
+
+  function loadChartJs() {
+    if (chartJsReady) return chartJsReady;
+    chartJsReady = new Promise((resolve, reject) => {
+      if (window.Chart) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Chart.js failed to load'));
+      document.head.appendChild(s);
+    });
+    return chartJsReady;
+  }
+
+  async function loadStats() {
+    try {
+      await loadChartJs();
+      const r = await fetch(`${API}/events?limit=200&offset=0`);
+      const data = await r.json();
+      const events = data.events || [];
+
+      const total = events.length;
+      const trusted = events.filter(e => e.decision && e.decision !== 'unknown');
+      const unknown = events.filter(e => e.decision === 'unknown');
+      const avgConf = trusted.length
+        ? trusted.reduce((a, e) => a + (e.confidence || 0), 0) / trusted.length
+        : 0;
+      const pct = (n) => total ? Math.round((n / total) * 100) + '%' : '—';
+
+      document.getElementById('kpi-total').textContent = total;
+      document.getElementById('kpi-trusted').textContent = trusted.length;
+      document.getElementById('kpi-trusted-sub').textContent = pct(trusted.length) + ' of all';
+      document.getElementById('kpi-unknown').textContent = unknown.length;
+      document.getElementById('kpi-unknown-sub').textContent = pct(unknown.length) + ' of all';
+      document.getElementById('kpi-conf').textContent = trusted.length ? Math.round(avgConf * 100) + '%' : '—';
+
+      // Build timeline: last 14 days bucketed by date
+      const days = 14;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const buckets = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today); d.setDate(d.getDate() - i);
+        buckets.push({ key: d.toISOString().slice(0, 10), label: d.toLocaleDateString(undefined, {month: 'short', day: 'numeric'}), trusted: 0, unknown: 0, latencySum: 0, latencyCount: 0 });
+      }
+      const byKey = Object.fromEntries(buckets.map(b => [b.key, b]));
+      for (const e of events) {
+        if (!e.timestamp) continue;
+        const k = new Date(e.timestamp).toISOString().slice(0, 10);
+        const b = byKey[k]; if (!b) continue;
+        if (e.decision === 'unknown') b.unknown++; else b.trusted++;
+        if (typeof e.latency_ms === 'number') { b.latencySum += e.latency_ms; b.latencyCount++; }
+      }
+
+      // Per-person counts
+      const byPerson = {};
+      for (const e of trusted) {
+        byPerson[e.decision] = (byPerson[e.decision] || 0) + 1;
+      }
+      const people = Object.keys(byPerson).sort((a, b) => byPerson[b] - byPerson[a]);
+
+      const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      const textMuted = cssVar('--text-muted');
+      const accent = cssVar('--accent');
+      const green = cssVar('--green');
+      const red = cssVar('--red');
+      const gridColor = 'rgba(148, 163, 184, 0.12)';
+
+      // Destroy old charts so re-renders don't leak
+      Object.values(statsCharts).forEach(c => c.destroy && c.destroy());
+      statsCharts = {};
+
+      const baseOpts = (opts = {}) => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: textMuted, font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: textMuted, font: { size: 11 } }, grid: { color: gridColor } },
+          y: { beginAtZero: true, ticks: { color: textMuted, font: { size: 11 }, precision: 0 }, grid: { color: gridColor } },
+        },
+        ...opts,
+      });
+
+      statsCharts.timeline = new Chart(document.getElementById('chart-timeline'), {
+        type: 'bar',
+        data: {
+          labels: buckets.map(b => b.label),
+          datasets: [
+            { label: 'Trusted', data: buckets.map(b => b.trusted), backgroundColor: green, borderRadius: 4, stack: 's' },
+            { label: 'Unknown', data: buckets.map(b => b.unknown), backgroundColor: red, borderRadius: 4, stack: 's' },
+          ],
+        },
+        options: baseOpts({
+          scales: {
+            x: { stacked: true, ticks: { color: textMuted, font: { size: 10 } }, grid: { color: gridColor } },
+            y: { stacked: true, beginAtZero: true, ticks: { color: textMuted, font: { size: 11 }, precision: 0 }, grid: { color: gridColor } },
+          },
+        }),
+      });
+
+      statsCharts.people = new Chart(document.getElementById('chart-people'), {
+        type: 'bar',
+        data: {
+          labels: people,
+          datasets: [{ label: 'Matches', data: people.map(p => byPerson[p]), backgroundColor: accent, borderRadius: 4 }],
+        },
+        options: baseOpts({
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+        }),
+      });
+
+      statsCharts.latency = new Chart(document.getElementById('chart-latency'), {
+        type: 'line',
+        data: {
+          labels: buckets.map(b => b.label),
+          datasets: [{
+            label: 'Avg latency (ms)',
+            data: buckets.map(b => b.latencyCount ? Math.round(b.latencySum / b.latencyCount) : null),
+            borderColor: accent,
+            backgroundColor: accent + '33',
+            borderWidth: 2,
+            tension: 0.3,
+            fill: true,
+            spanGaps: true,
+          }],
+        },
+        options: baseOpts({ plugins: { legend: { display: false } } }),
+      });
+    } catch (err) {
+      console.error('Stats load failed:', err);
+    }
   }
 
   // ── Admin Modal ───────────────────────────────────────────
