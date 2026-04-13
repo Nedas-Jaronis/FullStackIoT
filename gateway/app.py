@@ -2,6 +2,7 @@ import os
 import time
 import tempfile
 import secrets
+import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Optional
@@ -29,6 +30,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 MODEL_VERSION = "ArcFace"
 STORAGE_BUCKET = "enrolled-photos"
+VERIFY_BUCKET = "verification-images"
+SIGNED_URL_TTL = 3600
 TOKEN_TTL_HOURS = 24
 
 def _hash_password(password: str) -> str:
@@ -199,7 +202,7 @@ def load_and_cache_embeddings():
 
 def find_match(image_path: str):
     if not embedding_cache:
-        return "unknown", 0.0
+        return "unknown", 0.0, None
 
     # get embedding for the uploaded image — no face detected means unknown
     try:
@@ -210,16 +213,17 @@ def find_match(image_path: str):
         )
     except ValueError:
         print("  no face detected in uploaded image")
-        return "unknown", 0.0
+        return "unknown", 0.0, None
 
     if not reps:
-        return "unknown", 0.0
+        return "unknown", 0.0, None
 
     test_embedding = np.array(reps[0]["embedding"])
 
     # compare against all cached embeddings using cosine distance
     best_name = "unknown"
     best_distance = float("inf")
+    best_source = None
 
     for entry in embedding_cache:
         # cosine distance
@@ -232,13 +236,14 @@ def find_match(image_path: str):
         if distance < CONFIDENCE_THRESHOLD and distance < best_distance:
             best_distance = distance
             best_name = entry["name"]
+            best_source = entry["source"]
 
     if best_name == "unknown":
-        return "unknown", 0.0
-    return best_name, max(0.0, 1 - best_distance)
+        return "unknown", 0.0, None
+    return best_name, max(0.0, 1 - best_distance), best_source
 
 
-def log_event(decision, confidence, latency_ms, device_id="web-ui"):
+def log_event(decision, confidence, latency_ms, device_id="web-ui", image_path=None, matched_reference=None):
     if not supabase:
         return
     try:
@@ -249,6 +254,8 @@ def log_event(decision, confidence, latency_ms, device_id="web-ui"):
             "device_id": device_id,
             "model_version": MODEL_VERSION,
             "liveness_score": None,
+            "image_path": image_path,
+            "matched_reference": matched_reference,
         }).execute()
     except Exception as e:
         print(f"Supabase logging failed: {e}")
@@ -306,12 +313,33 @@ async def verify(
 ):
     start = time.time()
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-        tmp.write(await image.read())
+        image_bytes = await image.read()
+        tmp.write(image_bytes)
         tmp_path = tmp.name
     try:
-        name, confidence = find_match(tmp_path)
+        name, confidence, matched_reference = find_match(tmp_path)
         latency_ms = int((time.time() - start) * 1000)
-        log_event(name, confidence, latency_ms, device_id=x_device_id)
+
+        # Upload submitted image to verification-images bucket (for history review)
+        image_storage_path = None
+        if supabase_admin:
+            candidate_path = f"{datetime.now(timezone.utc).strftime('%Y/%m/%d')}/{uuid.uuid4().hex}.jpg"
+            try:
+                supabase_admin.storage.from_(VERIFY_BUCKET).upload(
+                    candidate_path,
+                    image_bytes,
+                    {"content-type": "image/jpeg"},
+                )
+                image_storage_path = candidate_path
+            except Exception as e:
+                print(f"Failed to upload verification image: {e}")
+
+        log_event(
+            name, confidence, latency_ms,
+            device_id=x_device_id,
+            image_path=image_storage_path,
+            matched_reference=matched_reference,
+        )
 
         description = None
         if name != "unknown" and supabase_admin:
@@ -553,6 +581,17 @@ async def delete_enrolled(name: str, _token: str = Depends(require_auth)):
 
 
 # ── Recognition history ───────────────────────────────────────────────────────────
+def _signed_url(bucket: str, path: Optional[str]) -> Optional[str]:
+    if not path or not supabase_admin:
+        return None
+    try:
+        res = supabase_admin.storage.from_(bucket).create_signed_url(path, SIGNED_URL_TTL)
+        return res.get("signedURL") or res.get("signed_url")
+    except Exception as e:
+        print(f"Signed URL failed for {bucket}/{path}: {e}")
+        return None
+
+
 @app.get("/events")
 async def get_events(
     limit: int = Query(default=50, le=200),
@@ -568,7 +607,11 @@ async def get_events(
             .range(offset, offset + limit - 1)
             .execute()
         )
-        return {"events": response.data}
+        events = response.data or []
+        for e in events:
+            e["image_url"] = _signed_url(VERIFY_BUCKET, e.get("image_path"))
+            e["matched_reference_url"] = _signed_url(STORAGE_BUCKET, e.get("matched_reference"))
+        return {"events": events}
     except Exception as e:
         return {"events": [], "error": str(e)}
 
