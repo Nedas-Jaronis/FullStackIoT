@@ -21,7 +21,7 @@ Audio audio;
 
 // ESP-NOW
 // MAC address of MCU-A — update after flashing MCU-A
-uint8_t mcuA_address[] = {0x6C, 0xC8, 0x40, 0x78, 0xFE, 0x40};
+uint8_t mcuA_address[] = {0xE8, 0xF6, 0x0A, 0x89, 0xFB, 0x14};
 
 // message structs — MUST match MCU-A exactly
 typedef struct {
@@ -101,8 +101,8 @@ void speakText(String text) {
   delay(300);
 }
 
-// ESP-NOW callbacks (v2.x API)
-void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+// ESP-NOW callbacks (ESP32 core v3.x signatures)
+void onDataRecv(const esp_now_recv_info *info, const uint8_t *data, int len) {
   if (listening && !resultReady && len == sizeof(ResultMsg)) {
     memcpy(&resultIn, data, sizeof(resultIn));
     resultReady = true;
@@ -110,7 +110,7 @@ void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
   }
 }
 
-void onDataSent(const uint8_t *mac, esp_now_send_status_t status) {
+void onDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
   Serial.print("Send status: ");
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "ok" : "fail");
 }

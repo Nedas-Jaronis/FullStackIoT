@@ -1,6 +1,7 @@
-// MCU-A: Freenove ESP32-WROVER — Vision + Network
-// Board: "ESP32 Wrover Module" in Arduino IDE
-// Flash: just plug in USB-C, no FTDI needed
+// MCU-A: XIAO ESP32S3 Sense — Vision + Network (wearable on glasses)
+// Board: "XIAO_ESP32S3" in Arduino IDE (install esp32 core v2.0.14+ from Espressif)
+// Also enable PSRAM: Tools → PSRAM → "OPI PSRAM"
+// Flash: just plug in USB-C
 // Waits for capture trigger from MCU-B via ESP-NOW
 // Captures JPEG → POSTs to gateway → sends result back to MCU-B via ESP-NOW
 
@@ -26,23 +27,23 @@ uint8_t MCU_B_MAC[6] = {0x6C, 0xC8, 0x40, 0x76, 0x54, 0x74};
 // a capture. Result prints to Serial only — no ESP-NOW send.
 // Once you fill in MCU-B's MAC above, solo mode disables automatically.
 
-// ── Freenove ESP32-WROVER camera pin config ──────────────────────────────────
-#define PWDN_GPIO_NUM     -1
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM     21
-#define SIOD_GPIO_NUM     26
-#define SIOC_GPIO_NUM     27
-#define Y9_GPIO_NUM       35
-#define Y8_GPIO_NUM       34
-#define Y7_GPIO_NUM       39
-#define Y6_GPIO_NUM       36
-#define Y5_GPIO_NUM       19
-#define Y4_GPIO_NUM       18
-#define Y3_GPIO_NUM        5
-#define Y2_GPIO_NUM        4
-#define VSYNC_GPIO_NUM    25
-#define HREF_GPIO_NUM     23
-#define PCLK_GPIO_NUM     22
+// ── XIAO ESP32S3 Sense camera pin config ────────────────────────────────────
+#define PWDN_GPIO_NUM    -1
+#define RESET_GPIO_NUM   -1
+#define XCLK_GPIO_NUM    10
+#define SIOD_GPIO_NUM    40
+#define SIOC_GPIO_NUM    39
+#define Y9_GPIO_NUM      48
+#define Y8_GPIO_NUM      11
+#define Y7_GPIO_NUM      12
+#define Y6_GPIO_NUM      14
+#define Y5_GPIO_NUM      16
+#define Y4_GPIO_NUM      18
+#define Y3_GPIO_NUM      17
+#define Y2_GPIO_NUM      15
+#define VSYNC_GPIO_NUM   38
+#define HREF_GPIO_NUM    47
+#define PCLK_GPIO_NUM    13
 
 // ── Shared ESP-NOW message structs — must match MCU-B exactly ───────────────
 // Trigger: MCU-B → MCU-A
@@ -68,8 +69,8 @@ bool soloMode() {
   return true;
 }
 
-// ── ESP-NOW callbacks ────────────────────────────────────────────────────────
-void onDataRecv(const uint8_t* mac, const uint8_t* data, int len) {
+// ── ESP-NOW callbacks (ESP32 core v3.x signatures) ──────────────────────────
+void onDataRecv(const esp_now_recv_info* info, const uint8_t* data, int len) {
   if (len != sizeof(TriggerMsg)) return;
   TriggerMsg msg;
   memcpy(&msg, data, sizeof(msg));
@@ -78,7 +79,7 @@ void onDataRecv(const uint8_t* mac, const uint8_t* data, int len) {
   }
 }
 
-void onDataSent(const uint8_t* mac, esp_now_send_status_t status) {
+void onDataSent(const wifi_tx_info_t* info, esp_now_send_status_t status) {
   Serial.printf("ESP-NOW send: %s\n",
     status == ESP_NOW_SEND_SUCCESS ? "ok" : "failed");
 }
@@ -104,7 +105,7 @@ bool initCamera() {
   cfg.pin_sccb_scl  = SIOC_GPIO_NUM;
   cfg.pin_pwdn      = PWDN_GPIO_NUM;
   cfg.pin_reset     = RESET_GPIO_NUM;
-  cfg.xclk_freq_hz  = 10000000;
+  cfg.xclk_freq_hz  = 20000000;  // XIAO ESP32S3 handles 20MHz fine, reduces motion blur
   cfg.pixel_format  = PIXFORMAT_JPEG;
   cfg.grab_mode     = CAMERA_GRAB_WHEN_EMPTY;
   cfg.fb_location   = CAMERA_FB_IN_PSRAM;
