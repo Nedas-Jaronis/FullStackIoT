@@ -1,10 +1,3 @@
-// MCU-A: XIAO ESP32S3 Sense — Vision + Network (wearable on glasses)
-// Board: "XIAO_ESP32S3" in Arduino IDE (install esp32 core v2.0.14+ from Espressif)
-// Also enable PSRAM: Tools → PSRAM → "OPI PSRAM"
-// Flash: just plug in USB-C
-// Waits for capture trigger from MCU-B via ESP-NOW
-// Captures JPEG → POSTs to gateway → sends result back to MCU-B via ESP-NOW
-
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -13,21 +6,15 @@
 #include "esp_camera.h"
 #include "esp_task_wdt.h"
 
-// ── Config ───────────────────────────────────────────────────────────────────
+// WiFi credentials
 #include "secrets.h"
 
 const char* GATEWAY_URL = "https://glasstint-gateway-478053964713.us-central1.run.app/verify";
 
-// MCU-B's MAC address — fill in once teammate sends it
-// Leave as FF:FF:FF:FF:FF:FF to run in SOLO TEST MODE (no MCU-B needed)
+// MAC of MCU-B. Leave as all 0xFF to run standalone (no ESP-NOW forwarding).
 uint8_t MCU_B_MAC[6] = {0x6C, 0xC8, 0x40, 0x76, 0x54, 0x74};
 
-// ── Solo test mode ────────────────────────────────────────────────────────────
-// When MCU_B_MAC is all FF (not set), type anything in Serial Monitor to trigger
-// a capture. Result prints to Serial only — no ESP-NOW send.
-// Once you fill in MCU-B's MAC above, solo mode disables automatically.
-
-// ── XIAO ESP32S3 Sense camera pin config ────────────────────────────────────
+// Camera pins for the XIAO ESP32S3 Sense
 #define PWDN_GPIO_NUM    -1
 #define RESET_GPIO_NUM   -1
 #define XCLK_GPIO_NUM    10
@@ -45,31 +32,28 @@ uint8_t MCU_B_MAC[6] = {0x6C, 0xC8, 0x40, 0x76, 0x54, 0x74};
 #define HREF_GPIO_NUM    47
 #define PCLK_GPIO_NUM    13
 
-// ── Shared ESP-NOW message structs — must match MCU-B exactly ───────────────
-// Trigger: MCU-B → MCU-A
+// These two structs must match MCU-B exactly
 typedef struct {
   char cmd[8];  // "CAPTURE"
 } TriggerMsg;
 
-// Result: MCU-A → MCU-B
 typedef struct {
   bool trusted;
   char name[32];
   char description[64];
-  int  confidence_pct;  // 0–100
+  int  confidence_pct;  // 0 to 100
 } ResultMsg;
 
-// ── State ────────────────────────────────────────────────────────────────────
 volatile bool captureRequested = false;
 esp_now_peer_info_t peerInfo;
 
 bool soloMode() {
-  // Solo mode = MCU-B MAC not set yet
+  // If MCU-B MAC is all 0xFF, skip ESP-NOW sends
   for (int i = 0; i < 6; i++) if (MCU_B_MAC[i] != 0xFF) return false;
   return true;
 }
 
-// ── ESP-NOW callbacks (ESP32 core v3.x signatures) ──────────────────────────
+// ESP-NOW callbacks, using ESP32 core v3.x signatures
 void onDataRecv(const esp_now_recv_info* info, const uint8_t* data, int len) {
   if (len != sizeof(TriggerMsg)) return;
   TriggerMsg msg;
@@ -84,7 +68,6 @@ void onDataSent(const wifi_tx_info_t* info, esp_now_send_status_t status) {
     status == ESP_NOW_SEND_SUCCESS ? "ok" : "failed");
 }
 
-// ── Camera init ──────────────────────────────────────────────────────────────
 bool initCamera() {
   camera_config_t cfg = {};
   cfg.ledc_channel  = LEDC_CHANNEL_0;
@@ -105,7 +88,7 @@ bool initCamera() {
   cfg.pin_sccb_scl  = SIOC_GPIO_NUM;
   cfg.pin_pwdn      = PWDN_GPIO_NUM;
   cfg.pin_reset     = RESET_GPIO_NUM;
-  cfg.xclk_freq_hz  = 20000000;  // XIAO ESP32S3 handles 20MHz fine, reduces motion blur
+  cfg.xclk_freq_hz  = 20000000;
   cfg.pixel_format  = PIXFORMAT_JPEG;
   cfg.grab_mode     = CAMERA_GRAB_WHEN_EMPTY;
   cfg.fb_location   = CAMERA_FB_IN_PSRAM;
@@ -134,31 +117,30 @@ bool initCamera() {
     s->set_brightness(s, 1);
     s->set_saturation(s, -2);
   }
-  s->set_framesize(s, FRAMESIZE_QVGA);  // 320x240 for fast POST to gateway
+  s->set_framesize(s, FRAMESIZE_QVGA);
 
-  // Discard first frame — sensor needs one cycle to adjust exposure
+  // First frame after boot is usually garbage, throw it away
   camera_fb_t* fb = esp_camera_fb_get();
   if (fb) esp_camera_fb_return(fb);
   delay(100);
   return true;
 }
 
-// ── Wi-Fi + ESP-NOW init ──────────────────────────────────────────────────────
 void initWiFiAndESPNOW() {
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);  // credentials from secrets.h
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
   Serial.printf("\nConnected. IP: %s\n", WiFi.localIP().toString().c_str());
-  Serial.printf("MCU-A MAC: %s  <-- give this to MCU-B sketch\n",
+  Serial.printf("MCU-A MAC: %s  (paste this into MCU-B)\n",
                 WiFi.macAddress().c_str());
   Serial.printf("WiFi channel: %d\n", WiFi.channel());
 
   if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW init failed — check Wi-Fi mode is WIFI_STA");
+    Serial.println("ESP-NOW init failed. Is WiFi mode WIFI_STA?");
     return;
   }
   esp_now_register_recv_cb(onDataRecv);
@@ -170,11 +152,10 @@ void initWiFiAndESPNOW() {
   peerInfo.ifidx   = WIFI_IF_STA;
   peerInfo.encrypt = false;
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Failed to add MCU-B as peer — check MAC address");
+    Serial.println("Could not add MCU-B as a peer. Check the MAC address.");
   }
 }
 
-// ── POST image to gateway ────────────────────────────────────────────────────
 void captureAndVerify() {
   Serial.println("Capturing photo...");
 
@@ -187,13 +168,14 @@ void captureAndVerify() {
   Serial.printf("Captured %u bytes. Sending to gateway...\n", fb->len);
 
   WiFiClientSecure client;
-  client.setInsecure();  // skip TLS cert verification — fine for embedded demo
+  client.setInsecure();
   HTTPClient http;
   http.begin(client, GATEWAY_URL);
   http.addHeader("X-Device-Id", "esp32-cam");
-  http.setTimeout(60000);  // 60s — Cloud Run cold start can take 30-60s
+  // Cloud Run can take 30 to 60 seconds on a cold start, so give it time
+  http.setTimeout(60000);
 
-  // Build multipart/form-data body manually (no library needed)
+  // Build a multipart/form-data body by hand so we don't need another library
   String boundary  = "GlassTintBound";
   String partHead  = "--" + boundary + "\r\n"
                      "Content-Disposition: form-data; name=\"image\"; filename=\"cap.jpg\"\r\n"
@@ -203,7 +185,7 @@ void captureAndVerify() {
   size_t totalLen = partHead.length() + fb->len + partTail.length();
   uint8_t* body   = (uint8_t*)malloc(totalLen);
   if (!body) {
-    Serial.println("malloc failed — not enough heap");
+    Serial.println("malloc failed, not enough heap");
     esp_camera_fb_return(fb);
     sendResult(false, "error", "", 0);
     return;
@@ -212,7 +194,7 @@ void captureAndVerify() {
   memcpy(body,                                  partHead.c_str(), partHead.length());
   memcpy(body + partHead.length(),              fb->buf,          fb->len);
   memcpy(body + partHead.length() + fb->len,   partTail.c_str(), partTail.length());
-  esp_camera_fb_return(fb);  // release frame buffer ASAP
+  esp_camera_fb_return(fb);
 
   http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
   int code = http.POST(body, totalLen);
@@ -222,9 +204,9 @@ void captureAndVerify() {
     String resp = http.getString();
     Serial.println("Gateway response: " + resp);
     http.end();
-    delay(500);  // let WiFi radio settle before ESP-NOW
+    delay(500);
     if (soloMode()) {
-      Serial.println(">>> SOLO MODE: result above is what MCU-B would receive <<<");
+      Serial.println(">>> SOLO MODE: result above is what MCU-B would have received");
     } else {
       parseAndForward(resp);
     }
@@ -235,7 +217,7 @@ void captureAndVerify() {
   }
 }
 
-// ── Minimal JSON field extraction (no ArduinoJson needed) ───────────────────
+// Tiny JSON helpers so we don't pull in ArduinoJson
 String jsonStr(const String& json, const String& key) {
   String needle = "\"" + key + "\":\"";
   int s = json.indexOf(needle);
@@ -268,7 +250,6 @@ void parseAndForward(const String& json) {
   );
 }
 
-// ── Send result to MCU-B via ESP-NOW ─────────────────────────────────────────
 void sendResult(bool trusted, const char* name, const char* desc, int conf_pct) {
   ResultMsg msg = {};
   msg.trusted        = trusted;
@@ -278,7 +259,7 @@ void sendResult(bool trusted, const char* name, const char* desc, int conf_pct) 
 
   delay(500);
 
-  // re-register peer — HTTP can disrupt ESP-NOW peer state
+  // The HTTP request tends to disrupt the peer, so re-add it before sending
   esp_now_del_peer(MCU_B_MAC);
   memset(&peerInfo, 0, sizeof(peerInfo));
   memcpy(peerInfo.peer_addr, MCU_B_MAC, 6);
@@ -289,7 +270,7 @@ void sendResult(bool trusted, const char* name, const char* desc, int conf_pct) 
 
   for (int i = 0; i < 3; i++) {
     esp_err_t res = esp_now_send(MCU_B_MAC, (uint8_t*)&msg, sizeof(msg));
-    Serial.printf("sendResult attempt %d → trusted=%d name=%s conf=%d%% (%s)\n",
+    Serial.printf("sendResult attempt %d, trusted=%d name=%s conf=%d%% (%s)\n",
       i + 1, msg.trusted, msg.name, msg.confidence_pct,
       res == ESP_OK ? "queued" : "send error");
     if (res == ESP_OK) break;
@@ -297,16 +278,16 @@ void sendResult(bool trusted, const char* name, const char* desc, int conf_pct) 
   }
 }
 
-// ── Arduino entry points ──────────────────────────────────────────────────────
 void setup() {
   delay(3000);
   Serial.begin(115200);
   Serial.println("\n=== MCU-A: GlassTint Vision Node ===");
 
-  esp_task_wdt_deinit();  // disable watchdog — camera init can be slow
+  // Camera init can take a while, keep the watchdog out of the way
+  esp_task_wdt_deinit();
 
   if (!initCamera()) {
-    Serial.println("FATAL: camera failed. Check ribbon cable and power cycle.");
+    Serial.println("FATAL: camera failed. Check the ribbon cable and power cycle.");
     while (true) delay(1000);
   }
   Serial.println("Camera OK");
@@ -314,16 +295,15 @@ void setup() {
   initWiFiAndESPNOW();
 
   if (soloMode()) {
-    Serial.println("*** SOLO TEST MODE — MCU-B MAC not set ***");
-    Serial.println("Type anything in Serial Monitor and press Enter to trigger a capture.");
-    Serial.println("Results print here only. ESP-NOW send is skipped.");
+    Serial.println("*** SOLO TEST MODE. MCU-B MAC not set. ***");
+    Serial.println("Type anything in Serial Monitor to trigger a capture.");
+    Serial.println("Results print here only, no ESP-NOW send.");
   } else {
-    Serial.println("Ready — waiting for CAPTURE trigger from MCU-B via ESP-NOW...");
+    Serial.println("Ready. Waiting for CAPTURE trigger from MCU-B.");
   }
 }
 
 void loop() {
-  // ESP-NOW trigger (from MCU-B when paired)
   if (captureRequested) {
     captureRequested = false;
     captureAndVerify();
@@ -331,9 +311,9 @@ void loop() {
     return;
   }
 
-  // Solo test mode: any Serial input triggers capture
+  // Solo test mode: any Serial input triggers a capture
   if (soloMode() && Serial.available()) {
-    while (Serial.available()) Serial.read();  // flush input
+    while (Serial.available()) Serial.read();
     captureAndVerify();
   }
 
