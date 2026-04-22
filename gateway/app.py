@@ -16,6 +16,7 @@ from pydantic import BaseModel
 import bcrypt
 import threading
 import numpy as np
+import cv2
 from deepface import DeepFace
 from supabase import create_client
 
@@ -25,6 +26,9 @@ load_dotenv()
 ENROLLED_DIR = Path(__file__).resolve().parent.parent / "enrolled"
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.6"))
+# Rotation applied to photos from the glasses (esp32-cam). Values: 0, 90, 180, 270.
+# 90 = rotate clockwise, compensates for a camera mounted rotated left on the frame.
+ESP32_CAM_ROTATION = int(os.getenv("ESP32_CAM_ROTATION", "90"))
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
@@ -200,6 +204,26 @@ def load_and_cache_embeddings():
             build_embedding_cache(ENROLLED_DIR)
 
 
+def _rotate_jpeg(jpeg_bytes: bytes, degrees: int) -> bytes:
+    """Rotate a JPEG by 90, 180, or 270 degrees clockwise. Returns new JPEG bytes."""
+    if degrees % 360 == 0:
+        return jpeg_bytes
+    arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return jpeg_bytes
+    rot = {
+        90:  cv2.ROTATE_90_CLOCKWISE,
+        180: cv2.ROTATE_180,
+        270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+    }.get(degrees % 360)
+    if rot is None:
+        return jpeg_bytes
+    img = cv2.rotate(img, rot)
+    ok, buf = cv2.imencode(".jpg", img)
+    return buf.tobytes() if ok else jpeg_bytes
+
+
 def find_match(image_path: str):
     if not embedding_cache:
         return "unknown", 0.0, None
@@ -312,8 +336,14 @@ async def verify(
     x_device_id: str = Header(default="web-ui"),
 ):
     start = time.time()
+    image_bytes = await image.read()
+
+    # Glasses camera is mounted sideways, so rotate incoming images from it.
+    # Web UI uploads stay untouched.
+    if x_device_id == "esp32-cam" and ESP32_CAM_ROTATION:
+        image_bytes = _rotate_jpeg(image_bytes, ESP32_CAM_ROTATION)
+
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-        image_bytes = await image.read()
         tmp.write(image_bytes)
         tmp_path = tmp.name
     try:
